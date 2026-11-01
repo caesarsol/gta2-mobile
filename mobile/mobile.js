@@ -269,6 +269,8 @@
       help: 'Cars only. If the stick points more than this behind the car, you reverse toward it instead of U-turning. Drawn as the dashed red sector.' },
     { k: 'revExit', label: 'Reverse · exit (°)', def: 100, step: 5, min: 60, max: 180,
       help: 'Leave reverse when the stick comes back within this angle. Keep it below "Reverse · enter" (hysteresis).' },
+    { k: 'rotate', label: 'Portrait lock · rotate', def: 1, step: 1, min: -1, max: 1,
+      help: 'Phone locked in portrait? The page is turned to landscape anyway: 1 = hold it with the notch on the left, −1 = notch on the right, 0 = off (follow the phone).' },
   ];
   const T = {};
   function loadTune() {
@@ -458,6 +460,10 @@
   function updateStick(x, y) {
     let dx = x - cx;
     let dy = y - cy;
+    // Forced landscape (see rotation below): touches arrive in screen coordinates while the
+    // page is turned 90°; bring the deltas into the page frame.
+    if (rotation === 1) [dx, dy] = [dy, -dx];
+    else if (rotation === -1) [dx, dy] = [-dy, dx];
     const dist = Math.hypot(dx, dy);
     stickDx = dx;
     stickDy = dy;
@@ -582,6 +588,41 @@
     requestAnimationFrame(loop);
   })();
 
+  // ---------- Forced landscape under a portrait orientation lock ----------
+  // iOS has no screen.orientation.lock and ignores the manifest's orientation, so when the
+  // phone is locked in portrait the page is turned 90° with CSS (body rotated, dimensions
+  // swapped) while the game is up. 1 = page top on the screen's right (hold the phone with
+  // the notch on the left), -1 = the other way, 0 = off. The renderer and the shell measure
+  // canvases with getBoundingClientRect(), whose box is the rotated one (sides swapped): the
+  // game canvases get a version that reports their layout size instead.
+  let rotation = 0;
+  const portraitMq = matchMedia('(orientation: portrait)');
+  const layoutRect = function () {
+    const w = this.clientWidth, h = this.clientHeight;
+    return { x: 0, y: 0, left: 0, top: 0, width: w, height: h, right: w, bottom: h, toJSON() { return this; } };
+  };
+  function patchCanvasRects(on) {
+    for (const id of ['screen', 'map-screen', 'map-overlay', 'map-radar']) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      if (on) el.getBoundingClientRect = layoutRect;
+      else delete el.getBoundingClientRect;
+    }
+  }
+  function syncRotation(gameUp) {
+    const want = gameUp && portraitMq.matches && T.rotate !== 0 ? (T.rotate > 0 ? 1 : -1) : 0;
+    if (want === rotation) { if (rotation) patchCanvasRects(true); return; } // canvases may appear later
+    rotation = want;
+    const cl = document.documentElement.classList;
+    cl.toggle('gta-rotate', rotation !== 0);
+    cl.toggle('gta-rotate-cw', rotation === 1);
+    cl.toggle('gta-rotate-ccw', rotation === -1);
+    patchCanvasRects(rotation !== 0);
+    if (stickId !== null) endStick();
+    window.dispatchEvent(new Event('resize'));
+  }
+  window.gtaRotation = () => rotation;
+
   // ---------- Sound pill (default off) ----------
   // Browsers only start audio inside a user gesture, and autostart.js presses
   // Play programmatically. The shell resumes its AudioContext on keydown /
@@ -677,6 +718,7 @@
     const g = G();
     const gameUp = !!g && shown('game');
     const landing = document.body.classList.contains('landing-on') || shown('landing');
+    syncRotation(gameUp && !landing);
     const screens = shown('saves-screen') || shown('controls-screen');
     const hide = !gameUp || landing || screens;
     if (hide !== root.hidden) {
@@ -722,5 +764,5 @@
   });
 
   // Expose for debugging from the console
-  window.gtaMobile = { press, release, tap, releaseAll, root, tune: T, TUNE_DEFS, live, readDev, get mode() { return mode; }, get tapStep() { return tapStep; }, get stopAhead() { return stopAhead; }, get carLatency() { return carLatency; } };
+  window.gtaMobile = { press, release, tap, releaseAll, root, tune: T, TUNE_DEFS, live, readDev, get mode() { return mode; }, get tapStep() { return tapStep; }, get stopAhead() { return stopAhead; }, get carLatency() { return carLatency; }, get rotation() { return rotation; } };
 })();

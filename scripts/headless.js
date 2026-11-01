@@ -21,8 +21,10 @@ const PROFILE_DIR = process.env.PROFILE_DIR || path.join(require('os').tmpdir(),
 
 async function launch({ url = DEFAULT_URL } = {}) {
   const args = ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'];
+  // VIEWPORT=390x844 for a portrait phone (forced-landscape tests); landscape by default.
+  const [vw, vh] = (process.env.VIEWPORT || '844x390').split('x').map(Number);
   const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
-    ...devices['iPhone 13'], isMobile: true, hasTouch: true, viewport: { width: 844, height: 390 }, args,
+    ...devices['iPhone 13'], isMobile: true, hasTouch: true, viewport: { width: vw, height: vh }, args,
   });
   if (process.env.INSTALLER_MIRROR) {
     await ctx.route('https://archive.org/cors/gta2_rockstar-classics/GTA2INSTALLER.exe', (route) =>

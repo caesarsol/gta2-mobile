@@ -44,6 +44,48 @@ html.gta-touch.gta-tools-on body:not(.landing-on) #tools label {
   border-radius: 20px;
 }
 
+/* ---- Forced landscape (mobile.js syncRotation): the body is turned 90° with its sides
+   swapped while the game is up and the viewport is portrait. Fixed descendants (the
+   overlay, the shell's map and radar canvases) are positioned inside the transformed body,
+   so everything turns together. The safe-area insets are physical: they move with it. */
+html.gta-rotate,
+html.gta-rotate body {
+  overflow: hidden;
+}
+html.gta-rotate body {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vh;
+  height: 100vw;
+  width: 100dvh;
+  height: 100dvw;
+  transform-origin: top left;
+}
+html.gta-rotate-cw body {
+  transform: rotate(90deg) translateY(-100%); /* page top → screen right: notch on the left */
+}
+html.gta-rotate-ccw body {
+  transform: rotate(-90deg) translateX(-100%); /* page top → screen left: notch on the right */
+}
+html.gta-rotate-cw #gtaMobile {
+  --pad-l: max(12px, env(safe-area-inset-top));
+  --pad-r: max(12px, env(safe-area-inset-bottom));
+  --pad-t: max(8px, env(safe-area-inset-right));
+  --pad-b: max(12px, env(safe-area-inset-left));
+}
+html.gta-rotate-ccw #gtaMobile {
+  --pad-l: max(12px, env(safe-area-inset-bottom));
+  --pad-r: max(12px, env(safe-area-inset-top));
+  --pad-t: max(8px, env(safe-area-inset-left));
+  --pad-b: max(12px, env(safe-area-inset-right));
+}
+html.gta-rotate #gtaVersion,
+html.gta-rotate #gtaReload {
+  /* mounted on body by boot.js: they turn with it; keep them inside the padded area */
+  top: 8px;
+}
+
 /* Component reset shared by every overlay control (pills and round buttons),
    wherever they are mounted (boot.js mounts the reload pill outside #gtaMobile). */
 .gta-pill,
