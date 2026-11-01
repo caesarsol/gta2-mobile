@@ -78,6 +78,17 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   standstill.
 - GTA2 has **no run key** and **no direct weapon selection** (J/K cycle): one move ring, and a
   weapon pill with ◀ ▶.
+- **On-foot turning is fast and quantised**: ~12° per 30 Hz tick once turning, seen a tick
+  late, so a hold-until-aligned controller oscillates ±20° forever, whatever the threshold
+  (measured 1.20 ↔ 1.89 rad around 1.57). The overlay **holds** the key while far, releases it
+  `stopAhead` (~0.3 rad, measured) early, then **taps** one tick at a time (~0.09 rad each,
+  measured) with ~110 ms to settle. Converges in ~0.5 s with no overshoot. Cars yaw slowly
+  (∝ speed) and keep the plain hold + hysteresis controller.
+- `dinput_web.cpp` keeps "pressed since the last read": a key down+up inside one tick still
+  counts as held for that tick, so one-frame taps are reliable.
+- The map screen (`gta2.map.open`) covers the game and pauses it; on touch only our map pill
+  stays visible to close it (M). The shell's toolbar `#tools` is hidden on touch and toggled by
+  the ⋯ pill (z-index above the overlay so its clicks land).
 - Front end: Bink movies are stubbed, so after `gta2_start` the game shows its title and
   menu; **Enter twice** (title, PLAY) starts area 1 — upstream's own `?autostart=1` does that
   at 1.5 s and 3.5 s. `autostart.js` sends Enter until `hasPlayer`. "Continue" on the landing
