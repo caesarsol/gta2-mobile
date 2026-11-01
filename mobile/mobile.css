@@ -294,10 +294,9 @@ html.gta-touch.gta-tools-on body:not(.landing-on) #tools label {
 #gtaTopBar {
   position: absolute;
   top: var(--pad-t);
-  left: 50%;
-  transform: translateX(-50%);
+  left: calc(var(--pad-l) + 70px); /* right of the HUD's health bars; the weapon pills take the right */
   display: flex;
-  gap: 8px;
+  gap: 6px;
   pointer-events: none;
 }
 #gtaTopBar .gta-pill {
@@ -420,11 +419,11 @@ html.gta-touch #map-radar {
   transform: scale(0.7);
   transform-origin: top right;
 }
-/* Weapon pill with ◀ ▶ on the right, left of the radar, under the HUD (hidden in menu mode) */
+/* Weapon pill with ◀ ▶ in the top row, just left of the HUD's weapon icon (hidden in menu mode) */
 #gtaWeapons {
   position: absolute;
-  right: calc(var(--pad-r) + 140px);
-  top: calc(var(--pad-t) + 92px);
+  right: calc(var(--pad-r) + 64px);
+  top: var(--pad-t);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -434,12 +433,17 @@ html.gta-touch #map-radar {
 #gtaMobile[data-mode='menu'] #gtaWeapons {
   display: none;
 }
+#gtaWeapon {
+  display: block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ---- boot.js: version label + reload pill ---- */
 #gtaVersion {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  left: calc(max(12px, env(safe-area-inset-left)) + 74px);
   top: calc(max(8px, env(safe-area-inset-top)) + 46px);
   z-index: 1001;
   color: rgba(255, 255, 255, 0.55);

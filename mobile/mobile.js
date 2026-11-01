@@ -126,7 +126,7 @@
     </div>
     <div id="gtaWeapons">
       <button type="button" class="gta-pill" id="gtaWeaponPrev" data-tap="KeyJ" aria-label="Previous weapon">◀</button>
-      <button type="button" class="gta-pill is-on" id="gtaWeapon">—</button>
+      <button type="button" class="gta-pill" id="gtaWeapon">—</button>
       <button type="button" class="gta-pill" id="gtaWeaponNext" data-tap="KeyK" aria-label="Next weapon">▶</button>
     </div>
     <div id="gtaTunePanel" class="gta-panel" hidden>
@@ -648,8 +648,9 @@
   // shows the current weapon and its ammo, flanked by ◀ ▶.
   // Weapon idx (gta2_dev_state): −1 fists, 1 pistol, 2 machine gun, … in the pickup order of
   // map.js WEAPONS (verified: idx 1 draws the pistol on the HUD). Ammo is 10× the HUD count.
-  const WEAPON_NAMES = ['Fists', 'Pistol', 'Machine Gun', 'Rocket Launcher', 'Electro Gun', 'Molotov', 'Grenades',
-    'Shotgun', 'Electro Baton', 'Flamethrower', 'Silenced MG', 'Dual Pistol'];
+  // Short names: the pill shares the top row with the bar and the HUD's weapon icon.
+  const WEAPON_NAMES = ['Fists', 'Pistol', 'MG', 'Rocket', 'Electro', 'Molotov', 'Grenade',
+    'Shotgun', 'Baton', 'Flame', 'Silenced', 'Dual'];
   const weaponsEl = root.querySelector('#gtaWeapons');
   const weaponEl = root.querySelector('#gtaWeapon');
   let weaponSig = '';
