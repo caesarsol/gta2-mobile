@@ -339,7 +339,7 @@
 
   function stickTick() {
     const s = live();
-    if (stickId === null || root.hidden) return;
+    if (stickId === null || root.hidden || root.dataset.screen) return;
     if (mode === 'menu' || !s || !s.hasPlayer) { menuTick(); return; }
 
     if (stickDist < T.ringMove) {
@@ -642,13 +642,20 @@
     const g = G();
     const gameUp = !!g && shown('game');
     const landing = document.body.classList.contains('landing-on') || shown('landing');
-    const screens = shown('saves-screen') || shown('controls-screen') || !!(g && g.map && g.map.open);
+    const screens = shown('saves-screen') || shown('controls-screen');
     const hide = !gameUp || landing || screens;
     if (hide !== root.hidden) {
       root.hidden = hide;
       if (hide) releaseAll();
     }
     if (hide) return;
+    // The map screen covers the game: keep only the map pill, to close it again.
+    const mapOpen = !!(g.map && g.map.open);
+    if (mapOpen !== (root.dataset.screen === 'map')) {
+      if (mapOpen) { root.dataset.screen = 'map'; releaseAll(); if (stickId !== null) endStick(); } else delete root.dataset.screen;
+      root.querySelector('#gtaMap').classList.toggle('is-on', mapOpen);
+    }
+    if (mapOpen) return;
     const s = live();
     const playing = !!(s && s.hasPlayer);
     const nextMode = playing ? 'play' : 'menu';

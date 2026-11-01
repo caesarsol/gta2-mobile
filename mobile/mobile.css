@@ -24,7 +24,7 @@ html.gta-touch :not(input):not(textarea):not(select) {
 html.gta-touch canvas {
   touch-action: none;
 }
-/* The shell's desktop toolbar, status line and FPS counter: the pills replace them on touch */
+/* The shell's desktop toolbar, status line and FPS counter: the pills replace them on touch. */
 html.gta-touch body:not(.landing-on) #tools,
 html.gta-touch body:not(.landing-on) #status,
 html.gta-touch #fps {
@@ -75,6 +75,11 @@ html.gta-touch #fps {
   --pad-t: max(8px, env(safe-area-inset-top));
 }
 #gtaMobile[hidden] {
+  display: none;
+}
+/* Map screen open: only the map pill stays, to close it */
+#gtaMobile[data-screen='map'] > :not(#gtaTopBar),
+#gtaMobile[data-screen='map'] #gtaTopBar > :not(#gtaMap) {
   display: none;
 }
 
