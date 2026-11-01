@@ -262,9 +262,9 @@
     { k: 'ringMove', label: 'Stick · move ring (px)', def: 20, step: 2, min: 6, max: 60,
       help: 'Dead zone radius. Inside it the stick does nothing; beyond it you walk / drive.' },
     { k: 'turnStart', label: 'Turn · start (°)', def: 5, step: 1, min: 1, max: 30,
-      help: 'Cars: start steering when the heading is off the stick direction by more than this. On foot the ped turns in ~12° steps, so the dead band is at least half a step; this value only raises it.' },
+      help: 'Dead band: start steering when the heading is off the stick direction by more than this. On foot the ped turns in ~5° steps, so the band is at least half a step; this value only raises it.' },
     { k: 'turnStop', label: 'Turn · stop (°)', def: 0, step: 1, min: 0, max: 20,
-      help: 'Cars: stop steering once the error is within this. Keep it below "Turn · start".' },
+      help: 'Cars: extra margin for letting go of the key. The release is already predicted from the yaw rate; raise this only if cars still overshoot.' },
     { k: 'revEnter', label: 'Reverse · enter (°)', def: 130, step: 5, min: 90, max: 180,
       help: 'Cars only. If the stick points more than this behind the car, you reverse toward it instead of U-turning. Drawn as the dashed red sector.' },
     { k: 'revExit', label: 'Reverse · exit (°)', def: 100, step: 5, min: 60, max: 180,
@@ -316,6 +316,13 @@
   let tapFrom = null; // heading when the tap was sent (to measure tapStep)
   let holdCode = null; // key held in the hold phase
   let holdFrom = null; // heading when the hold was released (to measure stopAhead)
+  // Cars: the yaw rate depends on speed, so the early release is predicted from the measured
+  // yaw rate × the measured latency (frames of coasting after a release), instead of a fixed
+  // angle. The same hold → settle → re-check cycle avoids the ±12° limit cycle at speed.
+  let carRate = 0; // rad per frame while steering (EMA of |Δheading|)
+  let carLatency = 3; // frames the car keeps yawing after the key is released (measured, EMA)
+  let carRateAtRelease = 0;
+  let lastHeading = null;
   const held = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
   function setHeld(code, on) {
@@ -354,7 +361,7 @@
       releaseHeld();
       turning = 0;
       reversing = false;
-      tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
+      tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null; lastHeading = null;
       return;
     }
 
@@ -418,9 +425,28 @@
       return;
     }
 
-    // In a car the yaw is proportional to speed (slow at low speed): hold the key with hysteresis.
-    if (turning === 0 && mag > deg(T.turnStart)) turning = delta > 0 ? 1 : -1;
-    else if (turning !== 0 && (mag < deg(T.turnStop) || Math.sign(delta) !== turning)) turning = 0;
+    // In a car: hold the key, release it when the predicted coasting (yaw rate × latency)
+    // would reach the target, settle, re-check against the dead band.
+    const now = performance.now();
+    const rate = lastHeading === null ? 0 : Math.abs(wrapAngle(heading - lastHeading));
+    lastHeading = heading;
+    if (turning !== 0) {
+      carRate = carRate * 0.6 + rate * 0.4;
+      const coast = carRate * carLatency;
+      if (mag <= coast + deg(T.turnStop) || Math.sign(delta) !== turning) {
+        turning = 0;
+        holdFrom = heading;
+        carRateAtRelease = carRate;
+        tapUntil = now + TAP_SETTLE_MS;
+      }
+    } else if (now >= tapUntil) {
+      if (holdFrom !== null) {
+        const coasted = Math.abs(wrapAngle(heading - holdFrom));
+        if (carRateAtRelease > 0.002) carLatency = Math.min(8, Math.max(1, carLatency * 0.6 + (coasted / carRateAtRelease) * 0.4));
+        holdFrom = null;
+      }
+      if (mag > deg(T.turnStart)) { turning = delta > 0 ? 1 : -1; carRate = 0; }
+    }
 
     setHeld('KeyA', turning * sign === 1);
     setHeld('KeyD', turning * sign === -1);
@@ -452,7 +478,7 @@
     knob.style.transform = '';
     turning = 0;
     reversing = false;
-    tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
+    tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null; lastHeading = null;
     releaseHeld();
   }
 
@@ -695,5 +721,5 @@
   });
 
   // Expose for debugging from the console
-  window.gtaMobile = { press, release, tap, releaseAll, root, tune: T, TUNE_DEFS, live, readDev, get mode() { return mode; }, get tapStep() { return tapStep; }, get stopAhead() { return stopAhead; } };
+  window.gtaMobile = { press, release, tap, releaseAll, root, tune: T, TUNE_DEFS, live, readDev, get mode() { return mode; }, get tapStep() { return tapStep; }, get stopAhead() { return stopAhead; }, get carLatency() { return carLatency; } };
 })();
