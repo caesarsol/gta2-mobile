@@ -86,6 +86,15 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   (∝ speed) and keep the plain hold + hysteresis controller.
 - `dinput_web.cpp` keeps "pressed since the last read": a key down+up inside one tick still
   counts as held for that tick, so one-frame taps are reliable.
+- **Forced landscape** (`syncRotation`): iOS has no `screen.orientation.lock` and ignores the
+  manifest orientation, so under a portrait lock the `body` is rotated 90° with CSS (sides
+  swapped, `position: fixed`; fixed descendants rotate with it). The renderer, `chooseViewWidth`
+  and the map measure canvases with `getBoundingClientRect()` **every frame**: on a rotated
+  element that box has its sides swapped, so the game canvases get an instance override that
+  returns the layout size. Stick deltas are rotated into the page frame; safe-area insets are
+  physical and get remapped. Known limit: taps on the shell's map screen (waypoints) are not
+  remapped. Tune `rotate`: 1 notch-left (default), −1 notch-right, 0 off. Headless:
+  `VIEWPORT=390x844`.
 - The map screen (`gta2.map.open`) covers the game and pauses it; on touch only our map pill
   stays visible to close it (M). The shell's toolbar `#tools` is hidden on touch and toggled by
   the ⋯ pill (z-index above the overlay so its clicks land).
