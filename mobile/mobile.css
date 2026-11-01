@@ -409,10 +409,21 @@ html.gta-touch.gta-tools-on body:not(.landing-on) #tools label {
   color: #ffc400;
 }
 
-/* Weapon pill with ◀ ▶ on the right, under the HUD's weapon icon (hidden in menu mode) */
+/* The shell's round radar: the port draws it bottom-right, under our FIRE / EXIT buttons.
+   On touch it moves to the top-right corner under the HUD's weapon icon, scaled down to fit
+   between the HUD (~85 px) and the buttons. Its inline left/top are set every frame by map.js,
+   hence !important; the drawing is self-contained so moving the canvas is safe. */
+html.gta-touch #map-radar {
+  left: auto !important;
+  right: max(12px, env(safe-area-inset-right)) !important;
+  top: calc(max(8px, env(safe-area-inset-top)) + 80px) !important;
+  transform: scale(0.7);
+  transform-origin: top right;
+}
+/* Weapon pill with ◀ ▶ on the right, left of the radar, under the HUD (hidden in menu mode) */
 #gtaWeapons {
   position: absolute;
-  right: var(--pad-r);
+  right: calc(var(--pad-r) + 140px);
   top: calc(var(--pad-t) + 92px);
   display: flex;
   align-items: center;
