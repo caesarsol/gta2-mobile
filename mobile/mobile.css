@@ -24,11 +24,24 @@ html.gta-touch :not(input):not(textarea):not(select) {
 html.gta-touch canvas {
   touch-action: none;
 }
-/* The shell's desktop toolbar, status line and FPS counter: the pills replace them on touch. */
+/* The shell's desktop toolbar, status line and FPS counter: the pills replace them on touch.
+   The ⋯ pill brings the toolbar back (above the overlay, fully opaque). */
 html.gta-touch body:not(.landing-on) #tools,
 html.gta-touch body:not(.landing-on) #status,
 html.gta-touch #fps {
   display: none;
+}
+html.gta-touch.gta-tools-on body:not(.landing-on) #tools:not([hidden]) {
+  display: flex;
+  opacity: 1;
+  z-index: 1001;
+  bottom: max(8px, env(safe-area-inset-bottom));
+}
+html.gta-touch.gta-tools-on body:not(.landing-on) #tools button,
+html.gta-touch.gta-tools-on body:not(.landing-on) #tools label {
+  font-size: 14px;
+  padding: 10px 14px;
+  border-radius: 20px;
 }
 
 /* Component reset shared by every overlay control (pills and round buttons),

@@ -9,7 +9,7 @@
  *   Bottom-left  → fixed joystick, absolute direction of travel on screen;
  *                  pointing behind a car = reverse (hysteresis)
  *   Right side   → FIRE (KeyL), ENTER/EXIT (Enter), JUMP/BRAKE (Space)
- *   Top bar      → saves, menu (Escape), map (KeyM), fullscreen, sound, tune, reload
+ *   Top bar      → saves, menu (Escape), map (KeyM), fullscreen, sound, tune, shell toolbar, reload
  *   Top bar      → also the Saves screen (the port's own save states)
  *   Right, under the HUD → current weapon + ammo, ◀ ▶ = previous / next (KeyJ / KeyK)
  *
@@ -122,6 +122,7 @@
       <button type="button" class="gta-pill" id="gtaFullscreen" aria-label="Fullscreen">${ICONS.fullscreen}</button>
       <button type="button" class="gta-pill" id="gtaSound" aria-label="Sound on/off">${ICONS.soundOff}</button>
       <button type="button" class="gta-pill" id="gtaTune" aria-label="Tune controls">${ICONS.gear}</button>
+      <button type="button" class="gta-pill" id="gtaTools" aria-label="Game toolbar">${ICONS.more}</button>
     </div>
     <div id="gtaWeapons">
       <button type="button" class="gta-pill" id="gtaWeaponPrev" data-tap="KeyJ" aria-label="Previous weapon">◀</button>
@@ -220,6 +221,13 @@
   onTap(root.querySelector('#gtaSaveBtn'), () => {
     const b = document.getElementById('saves-open');
     if (b) b.click();
+  });
+  // The shell's own toolbar (camera, view distance, minimap, FPS, saves export/import,
+  // controls, language…), hidden on touch: this pill shows it at the bottom.
+  const toolsBtn = root.querySelector('#gtaTools');
+  onTap(toolsBtn, () => {
+    const on = document.documentElement.classList.toggle('gta-tools-on');
+    toolsBtn.classList.toggle('is-on', on);
   });
 
   // ---------- Fullscreen + orientation ----------
