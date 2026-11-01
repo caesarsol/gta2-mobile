@@ -91,6 +91,7 @@
     save: svg('M17 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7l-4-4zm-5 16a3 3 0 110-6 3 3 0 010 6zm3-10H5V5h10v4z'),
     map: svg('M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z'),
     reload: svg('M17.65 6.35A7.96 7.96 0 0012 4a8 8 0 108 8h-2a6 6 0 11-1.76-4.24L13 11h7V4l-2.35 2.35z'),
+    more: svg('M6 10a2 2 0 100 4 2 2 0 000-4zm12 0a2 2 0 100 4 2 2 0 000-4zm-6 0a2 2 0 100 4 2 2 0 000-4z'),
   };
   window.gtaIcons = ICONS;
 
@@ -252,10 +253,10 @@
   const TUNE_DEFS = [
     { k: 'ringMove', label: 'Stick · move ring (px)', def: 20, step: 2, min: 6, max: 60,
       help: 'Dead zone radius. Inside it the stick does nothing; beyond it you walk / drive.' },
-    { k: 'turnStart', label: 'Turn · start (°)', def: 1, step: 1, min: 1, max: 30,
-      help: 'Start turning when your heading is off the stick direction by more than this. Smaller = snappier but can jitter.' },
+    { k: 'turnStart', label: 'Turn · start (°)', def: 5, step: 1, min: 1, max: 30,
+      help: 'Cars: start steering when the heading is off the stick direction by more than this. On foot the ped turns in ~12° steps, so the dead band is at least half a step; this value only raises it.' },
     { k: 'turnStop', label: 'Turn · stop (°)', def: 0, step: 1, min: 0, max: 20,
-      help: 'Stop turning once the error is within this. Keep it below "Turn · start".' },
+      help: 'Cars: stop steering once the error is within this. Keep it below "Turn · start".' },
     { k: 'revEnter', label: 'Reverse · enter (°)', def: 130, step: 5, min: 90, max: 180,
       help: 'Cars only. If the stick points more than this behind the car, you reverse toward it instead of U-turning. Drawn as the dashed red sector.' },
     { k: 'revExit', label: 'Reverse · exit (°)', def: 100, step: 5, min: 60, max: 180,
@@ -292,6 +293,21 @@
   let stickDx = 0, stickDy = 0, stickDist = 0;
   let turning = 0; // -1 = pressing right, 0 = none, +1 = pressing left
   let reversing = false;
+  // On foot the ped turns fast (~12° per game tick at 30 Hz once it is turning) and the key
+  // we press is seen a tick late, so holding a turn key until the error is small overshoots by
+  // ±20° and oscillates forever (measured: 1.20 ↔ 1.89 rad around a 1.57 target, whatever
+  // the threshold). Two phases instead: *hold* the key while the error is large and release
+  // it `stopAhead` early (the measured coasting after a release), then *tap*: one key press
+  // of one tick (~5°), ~100 ms to let the heading settle, re-measure, tap again. Both the
+  // coasting and the rotation per tap are measured on the fly, so the dead band adapts.
+  const TAP_SETTLE_MS = 110;
+  let tapStep = 0.09; // rad per tap, measured (EMA)
+  let stopAhead = 0.35; // rad the heading keeps turning after a hold is released, measured (EMA)
+  let tapCode = null; // key being tapped (released next frame)
+  let tapUntil = 0; // settling deadline
+  let tapFrom = null; // heading when the tap was sent (to measure tapStep)
+  let holdCode = null; // key held in the hold phase
+  let holdFrom = null; // heading when the hold was released (to measure stopAhead)
   const held = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
   function setHeld(code, on) {
@@ -330,6 +346,7 @@
       releaseHeld();
       turning = 0;
       reversing = false;
+      tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
       return;
     }
 
@@ -346,11 +363,57 @@
     const target = phi + Math.PI / 2 + (reversing ? Math.PI : 0);
     const delta = wrapAngle(target - heading);
     const mag = Math.abs(delta);
+    const sign = (TURN_LEFT_INCREASES ? 1 : -1) * (steerInverted(s) ? -1 : 1);
 
+    if (!s.inCar) {
+      // On foot: hold-then-tap turning (see above). W is held throughout.
+      const now = performance.now();
+      const dir = delta > 0 ? 1 : -1;
+      const keyFor = (d) => (d * sign > 0 ? 'KeyA' : 'KeyD');
+      if (holdCode) {
+        // Hold phase: let go `stopAhead` before the target, or if we passed it.
+        if (mag <= stopAhead || keyFor(dir) !== holdCode) {
+          setHeld(holdCode, false);
+          holdCode = null;
+          holdFrom = heading;
+          tapUntil = now + TAP_SETTLE_MS;
+        }
+      } else {
+        if (tapCode) { setHeld(tapCode, false); tapCode = null; }
+        if (now >= tapUntil) {
+          if (holdFrom !== null) {
+            const coast = Math.abs(wrapAngle(heading - holdFrom));
+            stopAhead = Math.min(0.8, Math.max(0.1, stopAhead * 0.6 + coast * 0.4));
+            holdFrom = null;
+          }
+          if (tapFrom !== null) {
+            const moved = Math.abs(wrapAngle(heading - tapFrom));
+            if (moved > 0.02) tapStep = tapStep * 0.7 + moved * 0.3;
+            tapFrom = null;
+          }
+          const band = Math.max(tapStep * 0.55, deg(T.turnStart));
+          if (mag > stopAhead + 2 * tapStep) {
+            holdCode = keyFor(dir);
+            setHeld(holdCode, true);
+          } else if (mag > band) {
+            tapCode = keyFor(dir);
+            setHeld(tapCode, true);
+            tapFrom = heading;
+            tapUntil = now + TAP_SETTLE_MS;
+          }
+        }
+      }
+      turning = 0;
+      setHeld('KeyW', true);
+      setHeld('KeyS', false);
+      stick.dataset.mode = 'fwd';
+      return;
+    }
+
+    // In a car the yaw is proportional to speed (slow at low speed): hold the key with hysteresis.
     if (turning === 0 && mag > deg(T.turnStart)) turning = delta > 0 ? 1 : -1;
     else if (turning !== 0 && (mag < deg(T.turnStop) || Math.sign(delta) !== turning)) turning = 0;
 
-    const sign = (TURN_LEFT_INCREASES ? 1 : -1) * (steerInverted(s) ? -1 : 1);
     setHeld('KeyA', turning * sign === 1);
     setHeld('KeyD', turning * sign === -1);
     setHeld('KeyW', !reversing);
@@ -381,6 +444,7 @@
     knob.style.transform = '';
     turning = 0;
     reversing = false;
+    tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
     releaseHeld();
   }
 
@@ -616,5 +680,5 @@
   });
 
   // Expose for debugging from the console
-  window.gtaMobile = { press, release, tap, releaseAll, root, tune: T, TUNE_DEFS, live, readDev, get mode() { return mode; } };
+  window.gtaMobile = { press, release, tap, releaseAll, root, tune: T, TUNE_DEFS, live, readDev, get mode() { return mode; }, get tapStep() { return tapStep; }, get stopAhead() { return stopAhead; } };
 })();
