@@ -7,17 +7,21 @@
 (() => {
   'use strict';
   const v = Date.now();
-  const FILES = ['mobile/mobile.css', 'mobile/mobile.js', 'mobile/autostart.js'];
+  // Our files live next to this loader: resolved from its own URL, so the archived builds under
+  // old/<id>/ (saves made by an earlier engine open there) load the same overlay from the root.
+  const BASE = new URL('.', (document.currentScript && document.currentScript.src) || location.href).href;
+  const url = (f) => new URL(f, BASE).href;
+  const FILES = ['mobile.css', 'mobile.js', 'autostart.js'];
 
   const css = document.createElement('link');
   css.rel = 'stylesheet';
-  css.href = `${FILES[0]}?v=${v}`;
+  css.href = `${url(FILES[0])}?v=${v}`;
   document.head.appendChild(css);
 
   // async=false keeps execution order for dynamically inserted scripts.
   for (const f of FILES.slice(1)) {
     const s = document.createElement('script');
-    s.src = `${f}?v=${v}`;
+    s.src = `${url(f)}?v=${v}`;
     s.async = false;
     document.head.appendChild(s);
   }
@@ -30,7 +34,7 @@
     document.body.appendChild(label);
     // Deploy time (Last-Modified) plus a few chars of the ETag, which changes with the content
     // even when the time header does not.
-    fetch(`mobile/mobile.js?v=${v}`, { method: 'HEAD', cache: 'no-store' })
+    fetch(`${url('mobile.js')}?v=${v}`, { method: 'HEAD', cache: 'no-store' })
       .then((r) => {
         const lm = r.headers.get('last-modified');
         const etag = (r.headers.get('etag') || '').replace(/\W/g, '').slice(-4);
@@ -59,7 +63,7 @@
       reload.textContent = '…';
       try {
         await Promise.all(
-          ['index.html', 'mobile/boot.js', ...FILES].map((f) => fetch(f, { cache: 'reload' }).catch(() => null))
+          ['index.html', url('boot.js'), ...FILES.map(url)].map((f) => fetch(f, { cache: 'reload' }).catch(() => null))
         );
       } finally {
         location.replace(`${location.pathname}?r=${Date.now()}${location.hash}`);

@@ -57,5 +57,6 @@ import shutil, sys
 shutil.copytree(sys.argv[1], sys.argv[2], dirs_exist_ok=True, ignore=shutil.ignore_patterns('README.md'))
 PY
 python3 "$REPO/engine/patch-index.py"
+for f in "$REPO"/old/*/index.html; do python3 "$REPO/engine/patch-index.py" "$f"; done
 echo "engine/build.sh: done. New build id: $(build_id "$REPO/gta2.wasm")"
 echo "Review with: git -C $REPO status --short | head; then commit."
