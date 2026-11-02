@@ -10,10 +10,11 @@ Design decisions and mechanics of `mobile.js` / `mobile.css` / `autostart.js` / 
   `localStorage['gta2-mobile:tune']`.
 - **On foot**: two rings. Dead zone `ringMove` (20 px); up to `ringAim` (60 px, dashed) the ped
   only **turns on the spot** (aim and shoot), knob white; beyond it the ped turns first and
-  **walks once within `walkStart`** (20°) of the direction, stopping again beyond 2× (hysteresis).
+  **walks once within `walkStart`** (45°; 20° made it stop and turn too often) of the direction,
+  stopping again beyond 2× (hysteresis).
   Turning uses the measured hold→tap controller (`notes/engine.md`, On foot).
 - **In a car**: any distance beyond the dead zone drives; the engine steers
-  (`setSteerTarget`), the overlay holds W or S. Pointing more than `revEnter` (130°) behind the
+  (`setSteerTarget`, soft zone `steerSoft` → `gta2_port_set_steer_ramp`), the overlay holds W or S. Pointing more than `revEnter` (130°) behind the
   car = reverse (exit below `revExit`, 100°), drawn as the red sector; A/D are flipped in reverse.
 - Rejected / removed: a JS-side predictive release for cars (replaced by the engine override),
   damping code (the user asked to remove it).
@@ -32,6 +33,16 @@ Design decisions and mechanics of `mobile.js` / `mobile.css` / `autostart.js` / 
   both top corners (health left, cash/lives/weapon right, down to ~85 px): never put anything
   there. Resets stay on the component classes, not on `#gtaMobile button` (the reload pill
   lives outside `#gtaMobile`).
+
+## Tune panel
+
+`TUNE_DEFS` entries are `{ k, label: 'Group · item', def, step, min, max, help }`; the panel
+groups rows by the label's group and flows the groups down two CSS columns (`columns: 2`,
+`break-inside: avoid`), ✕ pill absolute in the corner (the inner `.gta-panel-scroll` scrolls,
+padded on the left by the notch inset), small Reset. `saveTune` stores **only values that differ
+from the default**, so a changed default reaches everyone who left that setting alone (no
+migration list). Tap the label for the help text. No probes or screenshots for this panel (user
+request): edit and push.
 
 ## Touch hardening
 

@@ -9,8 +9,9 @@ gta2-browser with our patches; M1sterMo's last build (`3213c238…`) is kept und
 
 1. clones `gta2-browser` at the pinned commit (66d3462) into `<work>`, applies
    `engine/port-web.patch` (our changes to `port/`, `web/`, `scripts/` there) and the gta2_re
-   patches `engine/00NN-*.patch` (0026 Mobile camera, 0027 engine-side steering, 0028 camera
-   follow + look-ahead) onto `research/port-work/core`;
+   patches `engine/00NN-*.patch` (0026 Mobile camera: mode 2, follow spring, look-ahead hook;
+   0027 steering: key override hook + wheel-angle scale hook) onto `research/port-work/core`
+   (stale copies of our patches in `port/patches` are removed first);
 2. installs Emscripten 6.0.12 under `research/toolchains/emsdk` (first time only, ~300 MB; the
    download was once blocked by a classifier and then went through on retry) and the prebuilt
    unshield; `build_port.py --prepare`, `build_pages.py` (compile ≈ 30 s on 4 cores);
@@ -22,12 +23,17 @@ gta2-browser with our patches; M1sterMo's last build (`3213c238…`) is kept und
 This sandbox: work dir `/home/user/m1stermo`, sources and toolchain under
 `/home/user/m1stermo/gta2-browser/research/`. Edit the port there (`port/platform/*.cpp`,
 `web/*.js`, `scripts/build_port.py` exports) and regenerate `engine/port-web.patch` from its git
-diff; engine (gta2_re) changes become new numbered patches.
+diff; engine (gta2_re) changes become new numbered patches: commit in the core repo
+(`research/port-work/core`, branch `browser-port`), `git format-patch -1 --start-number NN -o
+engine/`. Keep **one patch per area** (squash into the existing camera / steering commit with a
+`rebase -i` and re-export both) rather than a patch per iteration: `build_port.py --prepare`
+re-creates the core from the patches, so the core's history is ours to rewrite.
 
 ## Port files we own
 
 - `port/platform/steer_web.cpp` — `gta2_port_set_steer_target`, `_set_steer_params`,
-  `_steer_debug` (see `notes/engine.md`, Cars).
+  `_set_steer_ramp` (soft zone), `_steer_debug`; `Gta2Port_SteerOverride` / `Gta2Port_SteerScale`
+  called from patch 0027 (see `notes/engine.md`, Cars).
 - `port/platform/mobile_camera_web.cpp` — `gta2_port_set_camera_lead(k, max)`,
   `gta2_port_set_camera_follow(scale)`.
 - `port/platform/dev_hooks.cpp` — `gta2_dev_*` (`find_open` is ours).
@@ -54,3 +60,10 @@ diff; engine (gta2_re) changes become new numbered patches.
   with (width − 640)/2, not the sign.
 - `gta2_port_set_camera` must clamp the mode to 0..2; the shell stores mode *strings*
   (`gta2-port-camera`: modern / mobile / classic).
+- **Experimental builds leave archives behind.** Every `build.sh` run archives the live build
+  under `old/<id>/` (repo) **and** under `build/port/release/old/` + `build/pages/old/` in the
+  work dir, and the next run copies the work-dir archives back into the repo. After an
+  experiment that was never published, delete its `old/<id>` in all three places (the final
+  rebuild then shows no `old/` change). The `old/` list is for builds a phone may have saves of.
+- The build is deterministic: the same sources give the same `gta2.wasm` (consolidating the
+  patches reproduced 02bb1fc4 exactly), so a patch-only change needs no new archive.

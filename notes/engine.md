@@ -85,16 +85,22 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   released, on foot or hidden.
 - **Skidding with the stick — measured (2026-11, clean runs, long road, model 25 at
   0.38 blocks/tick, 25° swerve for 0.5 s and back)**: stick with the engine steering at full
-  lock → max slip 9°, heading peak 22°, settled within 1° in ~1.4 s; keyboard 100 ms taps (3 + 3)
-  → slip 8°, peak 20°; keyboard A/D held 300 ms → slip 10°, peak 19°. So the stick does **not**
-  slide more than a keyboard player on this car; the "sbandate" felt on the phone were partly
-  **collisions with traffic** (speed collapsing 0.38 → 0.1 in a tick, then a 20–40° slide) and
-  partly the full-lock jab feel. **Soft zone (`gta2_port_set_steer_ramp(units)`, Tune
-  `steerRamp`, default 20°)**: within that angle of the target the key is pulsed by a sigma-delta
-  modulator with duty |predicted| / ramp (a quarter of the ticks at a quarter of the ramp), full
-  lock beyond. Measured on the same swerve: slip 7°, peak 17°, settled 0.7° in ~1.6 s — a bit
-  gentler, slightly slower; 0 = the old behaviour. Small cars with a high turn ratio were not
-  measured yet. `gta2_port_steer_debug()[3]` is now the key actually sent that tick.
+  lock → max slip 9–12°, heading peak 20–22°, settled within 1.5° in ~0.8 s from the peak;
+  keyboard 100 ms taps (3 + 3) → slip 8–12°, peak 20°; keyboard A/D held 300 ms → slip 10°,
+  peak 19°. So the stick does **not** slide more than a keyboard player on this car; the
+  "sbandate" felt on the phone were partly **collisions with traffic** (speed collapsing
+  0.38 → 0.1 in a tick, then a 20–40° slide) and partly the full-lock jab feel.
+- **Soft zone = proportional lock (patch 0027, `Gta2Port_SteerScale`)**: the port scales the
+  wheel angle of the local player's car in `UpdateSteeringAngle_562560` by 0..256. Inside
+  `gta2_port_set_steer_ramp(units)` (Tune `steerSoft`, default 30°) the lock is
+  `sqrt(|predicted| / zone)`, full lock beyond, floor 1/8; the zone shrinks linearly with speed
+  below 0.25 blocks/tick (a slow manoeuvre keeps the whole lock). The key is held continuously.
+  Measured on the swerve above: same peak (19–20°), slip **4–12°** (place-dependent, see the
+  testing lesson), settled 0.7–0.8 s, slip ≤ 3° on the return. A **linear** law (lock ∝ error)
+  crept over the last 5° for a second (lock at the floor); the square root keeps authority near
+  the target. `gta2_port_steer_debug()` → [active, error, ω, key sent, lock scale].
+- Rejected: pulsing the key inside the zone (sigma-delta duty cycle, build 2764a1dd): with a
+  wide zone (40°) the on/off ticks were visible as the old jitter. Removed.
 - The overlay shows `Car <model>` under the weapon pills while driving (model = handling index).
 
 ## Camera
@@ -104,13 +110,15 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   (`port_modern_camera.cpp`). `gta2_port_set_camera(mode, bias)` adds `bias` (clamped −2…+4)
   to the drawn height; `map.last.camZ` is that drawn height. The overlay's `camTick` holds it
   at Tune `camFoot` (2) / `camCar` (4) with bias = target − (camZ − bias), eased. Beyond the
-  clamp (fast cars) it drifts up a little. `camLock = 0` restores the shell's stored camera.
-- **Mobile camera (patch 0026)**: the real phone problem was the *lead*
+  clamp (fast cars) it drifts up a little; **5 is the ceiling** (own height ~1 + bias 4), so the
+  steppers stop there. `camLock = 0` restores the shell's stored camera. At 5 the view reaches
+  past the map edge near it (black, no bug).
+- **Mobile camera (patch 0026, mode 2)**: the real phone problem was the *lead*
   (`ApplyCarVelocityCameraOffset_436200` puts the camera up to ~4 blocks ahead of a moving car
   and raises it): the car ends up under the thumb. Mode 2 skips that offset (centred, like on
   foot); `gta2_port_set_camera` accepts 0/1/2; the shell's Camera button cycles Modern → Mobile
   → Classic (also a landing option); touch defaults to `mobile`.
-- **Follow + look-ahead (patch 0028, `port/platform/mobile_camera_web.cpp`)**: the camera
+- **Follow + look-ahead (same patch 0026, `port/platform/mobile_camera_web.cpp`)**: the camera
   follows its target with a spring (`SmoothApproach`, `Camera_0xBC::Update_435FF0`) whose
   acceleration and top speed scale with the *simulated* height; mode 2 keeps it at 1, so a fast
   car outran the camera (lag ≈ 2.8 blocks per block/tick; 1.1 blocks at 0.4 = the front edge
@@ -158,3 +166,6 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
 - 2026-11: speed collapses at full speed on the long road were traffic / abandoned test cars
   from previous probes (autosave Continue), not the steering override. Confirmed with clean
   runs: the collapse happens with keyboard steering too, and never without a car ahead.
+- 2026-11: a proportional lock with a linear law looked right in the first run and wrong in
+  the next: the test variants were tied to fixed road offsets (variant i always at offset i),
+  so place and law were confounded. Rotate offsets across variants.

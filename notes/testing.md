@@ -113,3 +113,14 @@ node scripts/headless.js                                        # smoke test: cl
 - The open square (`findOpen`) is 19 blocks with objects inside: cars reach ~0.1 blocks/tick
   and hit something within 3 blocks from the corner. Use it for low-speed turning only; speed
   tests go on the long road, started fresh per run, with 2–3 repeats to drop traffic hits.
+- **CDP touch dispatch is slow at speed**: `stickAt` (one `Input.dispatchTouchEvent`) returned
+  after ~200 ms, and in road runs the engine saw the new target up to ~1 s after the call; the
+  overlay itself reacts the next frame (verified with a `performance.now()` mark). Align the
+  analysis on the first steering frame (`steer[3] != 0` / first key), never on the wall-clock
+  time of the call.
+- **Rotate offsets across variants.** `off = 3 + 12 * (run % 4)` with 4 variants put every
+  variant at the same road offset every time: a parked car or a kerb at one offset then reads
+  as a property of that variant (the soft-zone slip "4° vs 12°" was partly this). Use
+  `(run * 3) % 4` or shuffle, and judge by the clean repeats.
+- Slip on the long road scatters ±4° between clean runs at the same settings; a difference
+  needs 3 clean runs per variant (speed must not collapse before the swerve or after it).
