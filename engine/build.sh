@@ -7,7 +7,8 @@
 # Needs: git, python3, ~3 GB of disk, network (emsdk 6.0.12 ≈ 600 MB, gta2_re, unshield).
 # A prebuilt unshield.{js,wasm} in <work>/gta2-browser/build/unshield skips the unshield build.
 # Steps: clone M1sterMo/gta2-browser at the pinned source commit, apply engine/port-web.patch
-# (port/ + web/ changes) and copy engine/00NN-*.patch into port/patches, install Emscripten,
+# (port/ + web/ changes) and copy engine/00NN-*.patch into port/patches (after removing stale
+# copies), install Emscripten,
 # run upstream's build_port.py --prepare (applies all patches to gta2_re) and build_pages.py,
 # keep the currently published build under old/<build-id>/ for existing saves, then rsync
 # build/pages into the repo root (mobile/, scripts/, engine/, CLAUDE.md and README.md untouched)
@@ -32,6 +33,7 @@ else
   git checkout -q "$SRC_PIN" && git reset -q --hard "$SRC_PIN" && git clean -qfd port web scripts
   git apply "$REPO/engine/port-web.patch"
 fi
+git clean -qf port/patches   # drop stale copies of our patches (renumbered / consolidated)
 cp "$REPO"/engine/00*.patch port/patches/
 mkdir -p research/toolchains
 [ -d research/gta2_re/.git ] || git clone -q https://github.com/CriminalRETeam/gta2_re research/gta2_re

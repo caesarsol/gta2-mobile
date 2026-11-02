@@ -1,36 +1,40 @@
-From 23522ca9cac56218466fd977f9c7aa0e88314967 Mon Sep 17 00:00:00 2001
+From a25e92dcea3038f5eb807ea5efe827172a33b066 Mon Sep 17 00:00:00 2001
 From: caesarsol <smilemachine@gmail.com>
-Date: Mon, 2 Nov 2026 01:42:47 +0000
-Subject: [PATCH] port: Mobile camera look-ahead hook (bounded lead along the
- velocity, mode 2)
+Date: Mon, 2 Nov 2026 00:09:51 +0000
+Subject: [PATCH 26/27] port: Mobile camera (mode 2) for GTA2 Mobile: centred
+ on the car, follow spring and bounded look-ahead
 
+Mode 2 skips the velocity camera offset and the height from speed (the car stayed under
+the thumb), scales the follow spring so a fast car does not outrun the camera, and adds a
+bounded look-ahead along the velocity (Gta2Port_CameraLead, port/platform/mobile_camera_web.cpp).
 ---
- Source/Camera.cpp | 25 ++++++++++++++++++++-----
+ Source/Camera.cpp | 28 ++++++++++++++++++++++++++--
  Source/Camera.hpp |  2 ++
- 2 files changed, 22 insertions(+), 5 deletions(-)
+ 2 files changed, 28 insertions(+), 2 deletions(-)
 
 diff --git a/Source/Camera.cpp b/Source/Camera.cpp
-index be73026a..de912368 100644
+index 75de08d0..de912368 100644
 --- a/Source/Camera.cpp
 +++ b/Source/Camera.cpp
-@@ -296,11 +296,13 @@ void Camera_0xBC::ApplyCarVelocityCameraOffset_436200(Car_BC* pCar, Fix16* pX, F
+@@ -295,6 +295,17 @@ MATCH_FUNC(0x436200)
+ void Camera_0xBC::ApplyCarVelocityCameraOffset_436200(Car_BC* pCar, Fix16* pX, Fix16* pY, Fix16* pZ)
  {
      // 9.6f 0x41EBF0: this source matches it exactly when built with VC7 (compile_vc7.sh, permuter_score.py --96f)
- #ifdef GTA2_PORT
--    // Mobile camera (mode 2): the camera stays centred on the car, as on foot. The original
--    // leads up to ~4 blocks ahead and rises with speed, which on a phone puts the car under
--    // the thumb on the stick and makes the view sway.
++#ifdef GTA2_PORT
 +    // Mobile camera (mode 2): the camera stays on the car, as on foot, with only a small
 +    // bounded look-ahead along the velocity (port/platform/mobile_camera_web.cpp). The
 +    // original leads up to ~4 blocks ahead and rises with speed, which on a phone puts the
 +    // car under the thumb on the stick and makes the view sway.
-     if (gGta2PortCameraMode == 2)
-     {
++    if (gGta2PortCameraMode == 2)
++    {
 +        Gta2Port_MobileCameraLead(pCar, pX, pY);
-         return;
-     }
- #endif
-@@ -538,6 +540,19 @@ void Camera_0xBC::Update_435FF0()
++        return;
++    }
++#endif
+     Ang16 angle;
+     Fix16_Point vel;
+     Fix16_Point offset;
+@@ -529,6 +540,19 @@ void Camera_0xBC::Update_435FF0()
  {
      Camera_0xBC::SavePrevCamPos_4357B0();
      Fix16 v5 = field_98_cam_pos2.field_8_z * dword_676918;
@@ -50,7 +54,7 @@ index be73026a..de912368 100644
  
      switch (field_3C_followed_ped_id)
      {
-@@ -545,12 +560,12 @@ void Camera_0xBC::Update_435FF0()
+@@ -536,12 +560,12 @@ void Camera_0xBC::Update_435FF0()
              SmoothApproach_4F7540(field_0_cam_pos_tgt1.field_0_x,
                                    field_AC_cam_velocity.field_0_x,
                                    field_98_cam_pos2.field_0_x,
