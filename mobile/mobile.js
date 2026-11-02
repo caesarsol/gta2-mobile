@@ -306,8 +306,8 @@
       help: 'Cars: how many game ticks of yaw momentum the engine-side steering anticipates before letting go. Higher = earlier release, less overshoot; too high = slow turns.' },
     { k: 'steerBand', label: 'Steer · dead band (°)', def: 1.5, step: 0.5, min: 0.5, max: 10,
       help: 'Cars: stop steering within this angle of the stick direction; it starts again beyond twice it.' },
-    { k: 'steerRamp', label: 'Steer · soft zone (°)', def: 30, step: 5, min: 0, max: 90, oldDefs: [20],
-      help: 'Cars: GTA2 steers at full lock only, which slides at speed. Within this angle of the target the steering key is pulsed in proportion to the remaining error (like tapping), beyond it full lock. 0 = always full lock (jabs and slides, settles fastest).' },
+    { k: 'steerSoft', label: 'Steer · soft zone (°)', def: 30, step: 5, min: 0, max: 90,
+      help: 'Cars: GTA2 itself steers at full lock only, which slides at speed. Within this angle of the stick direction the wheel angle is reduced (square root of the remaining error), full lock beyond it and at low speed. 0 = always full lock (jabs and slides).' },
     { k: 'revEnter', label: 'Reverse · enter (°)', def: 130, step: 5, min: 90, max: 180,
       help: 'Cars only. If the stick points more than this behind the car, you reverse toward it instead of U-turning. Drawn as the dashed red sector.' },
     { k: 'revExit', label: 'Reverse · exit (°)', def: 100, step: 5, min: 60, max: 180,
@@ -483,10 +483,10 @@
       return;
     }
 
-    // In a car the engine steers for us (engine patch 0027, port/platform/steer_web.cpp): it gets
-    // the target heading and decides left / right once per tick with the exact heading and
-    // angular velocity, which a controller out here cannot do without hunting (yaw momentum).
-    // We only hold the gas (or reverse).
+    // In a car the engine steers for us (engine patches 0027 + 0029, port/platform/steer_web.cpp):
+    // it gets the target heading and decides left / right and the wheel angle once per tick with
+    // the exact heading and angular velocity, which a controller out here cannot do without
+    // hunting (yaw momentum). We only hold the gas (or reverse).
     setHeld('KeyA', false);
     setHeld('KeyD', false);
     setSteerTarget(Math.round((((target % TAU) + TAU) % TAU) / TAU * 1440) % 1440);
@@ -509,10 +509,10 @@
     const canvas = document.getElementById('screen');
     const padL = Math.max(20, padProbe.offsetWidth || 0);
     const hudInset = canvas && canvas.clientHeight ? Math.round(padL * 480 / canvas.clientHeight) : 0;
-    const sig = `${T.steerKd}:${T.steerBand}:${T.steerRamp}:${T.camLead}:${hudInset}`;
+    const sig = `${T.steerKd}:${T.steerBand}:${T.steerSoft}:${T.camLead}:${hudInset}`;
     if (sig === steerParamsSent) return;
     try { g.Module.ccall('gta2_port_set_steer_params', null, ['number', 'number'], [Math.round(T.steerKd), Math.round(T.steerBand * 4)]); } catch { /* older engine */ }
-    try { g.Module.ccall('gta2_port_set_steer_ramp', null, ['number'], [Math.round(T.steerRamp * 4)]); } catch { /* older engine */ }
+    try { g.Module.ccall('gta2_port_set_steer_ramp', null, ['number'], [Math.round(T.steerSoft * 4)]); } catch { /* older engine */ }
     try { g.Module.ccall('gta2_port_set_camera_lead', null, ['number', 'number'], [T.camLead, 3]); } catch { /* older engine */ }
     try { g.Module.ccall('gta2_port_set_hud_inset', null, ['number'], [hudInset]); } catch { /* older engine */ }
     steerParamsSent = sig;

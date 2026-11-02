@@ -120,10 +120,10 @@ index 0000000..235c662
 +}
 diff --git a/port/platform/steer_web.cpp b/port/platform/steer_web.cpp
 new file mode 100644
-index 0000000..ae35331
+index 0000000..523addd
 --- /dev/null
 +++ b/port/platform/steer_web.cpp
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,172 @@
 +// GTA2 Mobile: steer the local player's car toward a target heading inside the physics tick.
 +//
 +// The touch overlay's joystick gives a direction of travel, but the game only takes left /
@@ -135,17 +135,21 @@ index 0000000..ae35331
 +// steering sense inverted, as the engine does for the keys.
 +//
 +// GTA2's steering is on/off at full lock (CarPhysics_B0::UpdateSteeringAngle_562560), so at
-+// speed every correction is a full-lock jab and the car slides. Inside a "soft zone" around the
-+// target the key is therefore pulsed: a sigma-delta modulator turns the wanted fraction
-+// |predicted| / ramp into a pattern of steering and idle ticks (1/4 of the ticks at a quarter
-+// of the ramp), the way a keyboard player taps for small corrections. Beyond the ramp it is
-+// full lock, as before.
++// speed every correction is a full-lock jab and the car slides. Patch 0029 lets the port scale
++// the wheel angle of this car: inside a "soft zone" around the target the lock follows the
++// remaining (momentum-corrected) error, sqrt(|predicted| / ramp), full lock beyond. The square
++// root keeps authority near the target (a linear law left a slow creep over the last degrees)
++// while damping the first jab: measured at 0.38 blocks/tick with a 25° swerve, slip 4° instead
++// of 12° at full lock, same heading peak, settled in 0.7 s. The zone shrinks with speed (full
++// width from kSoftFullSpeed up, none at a standstill): slow cars do not slide, and a tight
++// manoeuvre still gets the whole lock.
 +//
 +// gta2_port_set_steer_target(units): target heading in Ang16 units (0..1439, 4 per degree),
 +// -1 = off (the keys steer as usual). gta2_port_set_steer_params(kd, band): momentum look-ahead
 +// in ticks and dead band in Ang16 units. gta2_port_set_steer_ramp(units): soft zone width in
 +// Ang16 units (0 = always full lock).
 +#include <emscripten.h>
++#include <math.h>
 +#include "Car_BC.hpp"
 +#include "CarPhysics_B0.hpp"
 +#include "Game_0x40.hpp"
@@ -155,8 +159,9 @@ index 0000000..ae35331
 +
 +extern "C" {
 +s32 gGta2PortSteerTarget = -1;
-+s32 gGta2PortSteerKd = 2;   // ticks of momentum look-ahead
-+s32 gGta2PortSteerBand = 6; // stop steering within this (Ang16 units; 4 = 1°); restart beyond 2× it
++s32 gGta2PortSteerKd = 2;     // ticks of momentum look-ahead
++s32 gGta2PortSteerBand = 6;   // stop steering within this (Ang16 units; 4 = 1°); restart beyond 2× it
++s32 gGta2PortSteerRamp = 120; // soft zone: lock = |predicted| / ramp while below it (Ang16 units; 120 = 30°)
 +
 +EMSCRIPTEN_KEEPALIVE void gta2_port_set_steer_target(int units)
 +{
@@ -169,20 +174,24 @@ index 0000000..ae35331
 +    gGta2PortSteerBand = band < 0 ? 0 : band > 360 ? 360 : band;
 +}
 +
-+s32 gGta2PortSteerRamp = 80; // soft zone: pulse the key while |predicted| < ramp (Ang16 units; 80 = 20°)
-+
 +EMSCRIPTEN_KEEPALIVE void gta2_port_set_steer_ramp(int units)
 +{
 +    gGta2PortSteerRamp = units < 0 ? 0 : units > 720 ? 720 : units;
 +}
 +
-+// Debug: [active, error units, angular velocity units/tick, decision -1/0/1]
++// Debug: [active, error units, angular velocity units/tick, decision -1/0/1, lock scale 0..256]
 +EMSCRIPTEN_KEEPALIVE const s32* gta2_port_steer_debug();
 +}
 +
 +namespace
 +{
-+s32 gDebug[4];
++s32 gDebug[5];
++const s32 kFullScale = 256;
++const s32 kMinScale = 32;              // never below 1/8 lock (only reached with a very wide zone)
++const s32 kSoftFullSpeed = 16384 / 4;  // Fix16 blocks/tick (0.25): the soft zone is full from here up
++
++Car_BC* gScaledCar = nullptr; // the car whose wheel angle is scaled this tick
++s32 gScale = kFullScale;
 +
 +Ped* LocalPlayerPed()
 +{
@@ -199,10 +208,18 @@ index 0000000..ae35331
 +    return gDebug;
 +}
 +
++// Called from CarPhysics_B0::UpdateSteeringAngle_562560 (patch 0029): wheel angle scale /256.
++extern "C" int Gta2Port_SteerScale(Car_BC* car)
++{
++    return car && car == gScaledCar ? gScale : kFullScale;
++}
++
 +// Called from Car_BC::HandleUserInput_4418D0 (patch 0027) before the keys are used.
 +extern "C" void Gta2Port_SteerOverride(Car_BC* car, char* bLeftOn, char* bRightOn)
 +{
 +    gDebug[0] = 0;
++    gScaledCar = nullptr;
++    gScale = kFullScale;
 +    if (gGta2PortSteerTarget < 0 || !car || !car->field_58_physics)
 +    {
 +        return;
@@ -219,10 +236,12 @@ index 0000000..ae35331
 +    const s32 omega = phys->field_74_ang_vel_rad.mValue / 71; // Ang16 units per tick
 +    // Reversing: the velocity points against the heading (the physics' own test).
 +    bool reversing = false;
++    s32 speed = 0; // Fix16 blocks/tick
 +    if (!phys->field_40_linvel_1.IsNull())
 +    {
 +        const Ang16 rel = phys->field_40_linvel_1.atan2_40F790() - phys->field_58_theta;
 +        reversing = !(rel <= 360 || rel >= 1080);
++        speed = phys->field_40_linvel_1.GetLength_41E260().mValue;
 +    }
 +    // Hysteresis: once the car has settled, small errors are left alone (a tick of steering
 +    // always moves it more than the band), until the error grows to two bands.
@@ -250,44 +269,32 @@ index 0000000..ae35331
 +        decision = -1;
 +    }
 +    steering = decision;
-+    // Soft zone: pulse-width the steering by |predicted| / ramp (sigma-delta: the error
-+    // accumulator carries the fraction from tick to tick, so the pattern has no long gaps).
-+    static s32 pulse = 0;
-+    s32 key = decision;
-+    if (decision != 0 && gGta2PortSteerRamp > 0)
++    // Soft zone: lock = sqrt(|predicted| / ramp) inside ramp × (speed / kSoftFullSpeed, at most 1).
++    s32 scale = kFullScale;
++    if (decision != 0 && gGta2PortSteerRamp > 0 && speed > 0)
 +    {
 +        const s32 mag = predicted < 0 ? -predicted : predicted;
-+        if (mag < gGta2PortSteerRamp)
++        const s32 ramp = speed >= kSoftFullSpeed ? gGta2PortSteerRamp
++                                                  : (s32)((__int64)gGta2PortSteerRamp * speed / kSoftFullSpeed);
++        if (mag < ramp)
 +        {
-+            pulse += mag;
-+            if (pulse >= gGta2PortSteerRamp)
++            scale = (s32)sqrt((double)mag / ramp * kFullScale * kFullScale);
++            if (scale < kMinScale)
 +            {
-+                pulse -= gGta2PortSteerRamp;
-+            }
-+            else
-+            {
-+                key = 0;
++                scale = kMinScale;
 +            }
 +        }
-+        else
-+        {
-+            pulse = 0;
-+        }
 +    }
-+    else
-+    {
-+        pulse = 0;
-+    }
-+    if (reversing)
-+    {
-+        key = -key;
-+    }
++    gScaledCar = car;
++    gScale = scale;
++    const s32 key = reversing ? -decision : decision;
 +    *bLeftOn = key > 0 ? 1 : 0;
 +    *bRightOn = key < 0 ? 1 : 0;
 +    gDebug[0] = 1;
 +    gDebug[1] = error;
 +    gDebug[2] = omega;
-+    gDebug[3] = key; // the key actually sent this tick (0 on a pulsed-off tick)
++    gDebug[3] = key;
++    gDebug[4] = scale;
 +}
 diff --git a/port/render/frame.cpp b/port/render/frame.cpp
 index a3478f0..2a515cb 100644
