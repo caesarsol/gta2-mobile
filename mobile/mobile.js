@@ -63,6 +63,7 @@
   }
   function releaseAll() {
     for (const code of [...down]) release(code);
+    if (typeof setSteerTarget === 'function') setSteerTarget(-1);
   }
 
   // ---------- Game state (web/shell.js exposes window.gta2 once the game starts) ----------
@@ -267,9 +268,11 @@
     { k: 'ringMove', label: 'Stick · move ring (px)', def: 20, step: 2, min: 6, max: 60,
       help: 'Dead zone radius. Inside it the stick does nothing; beyond it you walk / drive.' },
     { k: 'turnStart', label: 'Turn · start (°)', def: 5, step: 1, min: 1, max: 30,
-      help: 'Dead band: start steering when the heading is off the stick direction by more than this. On foot the ped turns in ~5° steps, so the band is at least half a step; this value only raises it.' },
-    { k: 'turnStop', label: 'Turn · stop (°)', def: 0, step: 1, min: 0, max: 20,
-      help: 'Cars: stop steering once the error is within this. Keep it below "Turn · start".' },
+      help: 'On foot: dead band before a correction tap. The ped turns in ~5° steps, so the band is at least half a step; this value only raises it. In cars the engine steers (see Steer · …).' },
+    { k: 'steerKd', label: 'Steer · look-ahead (ticks)', def: 2, step: 1, min: 0, max: 10,
+      help: 'Cars: how many game ticks of yaw momentum the engine-side steering anticipates before letting go. Higher = earlier release, less overshoot; too high = slow turns.' },
+    { k: 'steerBand', label: 'Steer · dead band (°)', def: 1.5, step: 0.5, min: 0.5, max: 10,
+      help: 'Cars: stop steering within this angle of the stick direction; it starts again beyond three times it.' },
     { k: 'revEnter', label: 'Reverse · enter (°)', def: 130, step: 5, min: 90, max: 180,
       help: 'Cars only. If the stick points more than this behind the car, you reverse toward it instead of U-turning. Drawn as the dashed red sector.' },
     { k: 'revExit', label: 'Reverse · exit (°)', def: 100, step: 5, min: 60, max: 180,
@@ -365,6 +368,7 @@
 
     if (stickDist < T.ringMove) {
       releaseHeld();
+      setSteerTarget(-1);
       turning = 0;
       reversing = false;
       tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
@@ -387,6 +391,7 @@
     const sign = (TURN_LEFT_INCREASES ? 1 : -1) * (steerInverted(s) ? -1 : 1);
 
     if (!s.inCar) {
+      setSteerTarget(-1);
       // On foot: hold-then-tap turning (see above). W is held throughout.
       const now = performance.now();
       const dir = delta > 0 ? 1 : -1;
@@ -431,15 +436,35 @@
       return;
     }
 
-    // In a car: hold the key with hysteresis (plain controller; see CLAUDE.md "Car steering jitter").
-    if (turning === 0 && mag > deg(T.turnStart)) turning = delta > 0 ? 1 : -1;
-    else if (turning !== 0 && (mag < deg(T.turnStop) || Math.sign(delta) !== turning)) turning = 0;
-
-    setHeld('KeyA', turning * sign === 1);
-    setHeld('KeyD', turning * sign === -1);
+    // In a car the engine steers for us (engine patch 0027, port/platform/steer_web.cpp): it gets
+    // the target heading and decides left / right once per tick with the exact heading and
+    // angular velocity, which a controller out here cannot do without hunting (yaw momentum).
+    // We only hold the gas (or reverse).
+    setHeld('KeyA', false);
+    setHeld('KeyD', false);
+    setSteerTarget(Math.round((((target % TAU) + TAU) % TAU) / TAU * 1440) % 1440);
     setHeld('KeyW', !reversing);
     setHeld('KeyS', reversing);
     stick.dataset.mode = reversing ? 'rev' : 'fwd';
+  }
+
+  // Engine-side steering parameters (Tune): momentum look-ahead in ticks, dead band in degrees → Ang16 units.
+  let steerParamsSent = '';
+  function applySteerParams() {
+    const g = G();
+    if (!g || !g.Module) return;
+    const sig = `${T.steerKd}:${T.steerBand}`;
+    if (sig === steerParamsSent) return;
+    try { g.Module.ccall('gta2_port_set_steer_params', null, ['number', 'number'], [Math.round(T.steerKd), Math.round(T.steerBand * 4)]); steerParamsSent = sig; } catch { /* older engine */ }
+  }
+  // The engine-side steering target (Ang16 units, 4 per degree; -1 = off). Sent only on change.
+  const TAU = Math.PI * 2;
+  let steerSent = -1;
+  function setSteerTarget(units) {
+    if (units === steerSent) return;
+    const g = G();
+    if (!g || !g.Module) return;
+    try { g.Module.ccall('gta2_port_set_steer_target', null, ['number'], [units]); steerSent = units; } catch { /* older engine */ }
   }
 
   function updateStick(x, y) {
@@ -471,6 +496,7 @@
     reversing = false;
     tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
     releaseHeld();
+    setSteerTarget(-1);
   }
 
   // Ring size and reverse sector follow the tunables
@@ -778,6 +804,7 @@
     const nextMode = playing ? 'play' : 'menu';
     if (nextMode !== mode) { mode = nextMode; releaseHeld(); root.dataset.mode = mode; }
     devState = playing ? readDev() : null;
+    applySteerParams();
     syncWeapon(devState);
     syncCar(devState);
     if (!soundApplied && g.audio) applySound(false); // default: muted until the pill is tapped
