@@ -110,17 +110,25 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   handling data's skid thresholds no longer matter. Applied whether or not a steering target is
   set (a coasting car would slide otherwise). Side effects accepted: a sideways push (another
   car, an explosion) is cancelled the next tick, so the car cannot be shoved sideways.
-- **Jitter a few degrees off a road's axis (measured 2026-11-02, Z-Type on the long road, stick
-  at axis + 5°, Tune defaults and grip 0 alike)**: the car never holds 5°; it sits at 0.8–2°
-  and the heading cycles 0.8 → 2 → 1.3 → 1 → 0.8 every 4 frames (~5 Hz, ±1°), one 1/3-lock
-  jab per cycle (`steer_debug` key 1 / scale ~85 one frame in four). Driving at 5° across the
-  road reaches the kerb within ~2 s, and the map-edge collision response realigns a scraping
-  car to the wall's axis (see "Steering jitter: root cause"): the override jabs it back toward
-  the target, the kerb pulls it to 0 again. Control: the same car spawned 5° off the axis with W
-  held and no steering target (`VARIANTS=wkey`) ends at heading exactly 0.0, no jabs, scraping
-  at speed 0.08. So the jitter is the override fighting the kerb, not a limit cycle of its own
-  (in free space it settles, see above). With grip 100 the velocity follows every jab, so the
-  lateral position (and the pinned camera) jitters too; with grip 0 only the sprite's heading.
+- **Jitter a few degrees off a road's axis = the override fighting GTA2's road steer assist**
+  (measured 2026-11-02, Z-Type on the long road, stick at axis + 5°, Tune defaults and grip 0
+  alike): the car never holds 5°; it sits at 0.8–2° and the heading cycles 0.8 → 2 → 1.3 → 1 →
+  0.8 every 4 frames (~5 Hz, ±1°), one 1/3-lock jab per cycle (`steer_debug` key 1 / scale
+  ~85 one frame in four), **in the middle of the road** (lateral position 0.5–0.85 blocks from
+  the road column's axis, never near a kerb — a first reading blamed the kerb; wrong, the user
+  was right). Control runs with W held and no steering target (`VARIANTS=wkey`): on the road
+  the car spawned at 5° turns itself to exactly 0.0° within 0.5 s of moving and stays there;
+  in the open square (`PLACE=open`) it keeps 5.0° until it hits something. The engine function
+  is `CarPhysics_B0::ApplyArrowSteerAssist_5626F0` (called from the physics update, twice):
+  when the gas is pressed enough, the wheels are straight (`field_78_pointing_ang_rad == 0`),
+  the velocity is aligned with the heading, no oil spin, and the car is on a road block with
+  arrows, it adds `axis − θ` (capped at `GetMaxTurnRate_440510`) to the angular velocity while
+  the heading is within **25°** (`k_dword_6FE134`) of the arrows' axis (the debug HUD prints
+  "snap"). So any stick heading within 25° of a road's axis is a fight: the assist pulls to
+  the axis each tick the key is up, the override jabs back. There is no such assist off-road
+  (the park measurement above still holds). With grip 100 the velocity follows every jab, so
+  the lateral position (and the pinned camera) jitters too; with grip 0 only the heading.
+  Also of interest there: `field_60_gas_pedal` is an analog pedal (`IsGasPedalPressedEnough`).
 - The overlay shows `Car <model>` under the weapon pills while driving (model = handling index).
 
 ## Camera
