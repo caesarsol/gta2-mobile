@@ -84,20 +84,23 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   `stopAhead` (~0.3 rad, measured) early, then **taps** one tick at a time (~0.09 rad each,
   measured) with ~110 ms to settle. Converges in ~0.5 s with no overshoot. Cars yaw slowly
   (∝ speed) and keep the plain hold + hysteresis controller.
-- **Car steering jitter at non-cardinal directions: root cause (verified).** Cars hold 0°,
-  90°, 180°, 270° perfectly but jitter at 10° or 45°. GTA2 **straightens a driven car to the
-  nearest road axis**: while the gas is on, `CarPhysics_B0::ApplyForwardEngineForce_55EC30`
-  (and `ApplyReverseEngineForce_55EF20`) apply an angular impulse toward the axis the car is
-  closest to. Measured with scratchpad probes (hold W to speed, tap A, keep W): a 7° offset
-  snaps back to exactly 0° in one tick, 21° eases back to 0° in ~2.5 s; coasting (no gas)
-  keeps the offset. So at a diagonal target our controller and the engine fight over the
-  wheel for ever; at cardinal targets the snap helps us. Small cars (higher turn ratio) show
-  it most. **Method**: `scripts/headless.js` + a probe that records `map.last.heading`, the
-  held keys and `gta2_dev_state` speed every animation frame, on the long road from
-  `gta2_dev_find_road` (teleport there, `enterCar`), first with a cardinal target, then with
-  offsets of 10–45°, then without our controller (plain key taps) to separate the engine's
-  behaviour from ours. The overlay shows `Car <model>` under the weapon pills while driving,
-  so a misbehaving model can be named and spawned (`gta2_dev_spawn_car(model, …)`).
+- **Car steering jitter: root cause (verified in open ground).** Cars have **yaw momentum**:
+  after the steering key is released the heading keeps turning ~10° at low speed (more at
+  speed, more for small cars with a high turn ratio), on top of the 1–2 tick input latency. The
+  plain hold + hysteresis controller (dead band 5°) therefore overshoots and hunts around any
+  target with a ±10° limit cycle, period ~1 s — measured in the largest open square of the map
+  (`gta2_dev_find_open`, a park) for targets of 10°, 30°, 45° **and 90°** alike. Why it looks
+  direction-dependent on the phone: going straight along a street nothing is corrected, and
+  at the cardinal directions the kerbs/buildings realign a scraping car (the map-edge collision
+  response, `CarPhysics_B0::ApplyForward/ReverseEngineForce` → an angular impulse of 1°/tick
+  toward the wall's axis) which damps the hunt; at a diagonal nothing masks it and the walls
+  add their own torque. There is **no** free-space auto-straightening (an earlier reading of
+  the probe data, taken on a one-block-wide road, was wrong: the car was scraping the kerb).
+  **Method**: `scripts/headless.js` + a scratchpad probe that teleports to the open square,
+  spawns a car (`gta2_dev_spawn_car(10, 0, 2, 0)` then Enter; ~4.5 s), and records
+  `map.last.heading`, the held keys and `gta2_dev_state` speed every animation frame, first
+  with the engine alone (W, a 150 ms A tap, W: the new heading holds), then with the stick at
+  several offsets. The overlay shows `Car <model>` under the weapon pills while driving.
 - `dinput_web.cpp` keeps "pressed since the last read": a key down+up inside one tick still
   counts as held for that tick, so one-frame taps are reliable.
 - **Forced landscape** (`syncRotation`): iOS has no `screen.orientation.lock` and ignores the
