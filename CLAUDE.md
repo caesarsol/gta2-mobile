@@ -168,7 +168,18 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
 - The map screen (`gta2.map.open`) covers the game and pauses it; on touch the overlay shows
   only the **map bar**: close (M), zoom + / − (KeyE / KeyQ), You (Space, recentre), Reveal
   (KeyF, all vs. only what you have seen; `map.reveal`), Clear (Delete, drops the waypoint;
-  dimmed when none). Drag pans, a tap sets the waypoint (also under the forced rotation). The shell's toolbar `#tools` is hidden on touch and toggled by
+  dimmed when none), as a right-aligned column (✕ on top, a pill-high gap, then the actions)
+  so it never covers the legend at the left. Drag pans, a tap sets the waypoint (also under
+  the forced rotation), **two fingers pinch-zoom**: the overlay's window-capture interceptor
+  owns every pointer event on `#map-screen`, forwards single-finger ones (page coordinates),
+  and on a second finger ends the map's own drag with a synthetic moved+up (no waypoint),
+  then drives `map.zoomBy(f, midX, midY)` plus the midpoint pan itself until all fingers lift.
+  The map canvas is inset 20 px (or the safe area) from the notch side.
+- **HUD inset** (`gta2_port_set_hud_inset(refPx)`, port `frame.cpp`): the port anchors HUD
+  parts to the screen edges by ±(width − 640)/2 reference px; the inset pulls the anchored
+  parts back in. The overlay sends its side padding (safe area / notch, ≥ 20 px) converted to
+  reference px (480 per canvas height), so the health bars and the weapon icon clear the notch
+  while the game view stays put. The shell's toolbar `#tools` is hidden on touch and toggled by
   the ⋯ pill (z-index above the overlay so its clicks land).
 - Front end: Bink movies are stubbed, so after `gta2_start` the game shows its title and
   menu; **Enter twice** (title, PLAY) starts area 1 — upstream's own `?autostart=1` does that
