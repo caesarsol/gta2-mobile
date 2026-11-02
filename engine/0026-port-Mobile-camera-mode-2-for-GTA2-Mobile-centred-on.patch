@@ -1,4 +1,4 @@
-From e266a1f07b6c46b2f20644b505d498984b468c31 Mon Sep 17 00:00:00 2001
+From bedd72524420a4c00fbe6b200118b71851e21e19 Mon Sep 17 00:00:00 2001
 From: caesarsol <smilemachine@gmail.com>
 Date: Mon, 2 Nov 2026 00:09:51 +0000
 Subject: [PATCH 26/27] port: Mobile camera (mode 2) for GTA2 Mobile: centred
@@ -10,13 +10,14 @@ the thumb), pins the camera x / y to this tick's follow target instead of the fo
 bounded look-ahead hook along the velocity (Gta2Port_MobileCameraLead,
 port/platform/mobile_camera_web.cpp; the port keeps it at 0 by default).
 ---
- Source/Camera.cpp  | 92 +++++++++++++++++++++++++++++++++++++++++++++-
- Source/Camera.hpp  |  2 +
- Source/winmain.cpp |  2 +
- 3 files changed, 95 insertions(+), 1 deletion(-)
+ Source/Camera.cpp             | 101 +++++++++++++++++++++++++++++++++-
+ Source/Camera.hpp             |   3 +
+ Source/port_modern_camera.cpp |  12 ++++
+ Source/winmain.cpp            |   2 +
+ 4 files changed, 117 insertions(+), 1 deletion(-)
 
 diff --git a/Source/Camera.cpp b/Source/Camera.cpp
-index 75de08d0..d11b4972 100644
+index 75de08d0..493013d2 100644
 --- a/Source/Camera.cpp
 +++ b/Source/Camera.cpp
 @@ -295,6 +295,17 @@ MATCH_FUNC(0x436200)
@@ -82,7 +83,7 @@ index 75de08d0..d11b4972 100644
              SmoothApproachClamped_4F75D0(&field_0_cam_pos_tgt1.field_8_z,
                                           &field_AC_cam_velocity.field_8_z,
                                           &field_98_cam_pos2.field_8_z,
-@@ -947,4 +989,52 @@ bool Camera_0xBC::IsPointInBoundaries_58CF10(Fix16 a2, Fix16 a3)
+@@ -947,4 +989,61 @@ bool Camera_0xBC::IsPointInBoundaries_58CF10(Fix16 a2, Fix16 a3)
  {
      return a2 >= field_78_boundaries_non_neg.field_0_left && a2 <= field_78_boundaries_non_neg.field_4_right &&
          a3 >= field_78_boundaries_non_neg.field_8_top && a3 <= field_78_boundaries_non_neg.field_C_bottom;
@@ -132,25 +133,58 @@ index 75de08d0..d11b4972 100644
 +    // after Update_435FF0, camera - target is the shake it applied (zero otherwise)
 +    x += cam.field_98_cam_pos2.field_0_x - cam.field_0_cam_pos_tgt1.field_0_x;
 +    y += cam.field_98_cam_pos2.field_4_y - cam.field_0_cam_pos_tgt1.field_4_y;
++    // Move the game camera too (the view camera is its copy), and tell the Modern filter: it
++    // recognises the view camera as a copy of the updated one by position, and the drawn
++    // height fell back to the raw one (a snap from 2 to 1 the moment the player moved) when
++    // only the view camera had moved.
++    Camera_0xBC& game = pPlayer->field_90_game_camera;
++    game.field_98_cam_pos2.field_0_x = x;
++    game.field_98_cam_pos2.field_4_y = y;
++    game.RefreshBoundaries_436110();
++    Gta2Port_ModernCameraMoved(&game);
 +    cam.field_98_cam_pos2.field_0_x = x;
 +    cam.field_98_cam_pos2.field_4_y = y;
 +    cam.RefreshBoundaries_436110();
 +}
 +#endif
 diff --git a/Source/Camera.hpp b/Source/Camera.hpp
-index 36e738d3..1a3cc150 100644
+index 36e738d3..64111f3c 100644
 --- a/Source/Camera.hpp
 +++ b/Source/Camera.hpp
-@@ -242,7 +242,9 @@ EXTERN_GLOBAL(Camera_0xBC*, gViewCamera_676978);
+@@ -242,7 +242,10 @@ EXTERN_GLOBAL(Camera_0xBC*, gViewCamera_676978);
  #ifdef GTA2_PORT
  // port_modern_camera.cpp (D17)
  extern "C" s32 gGta2PortCameraMode;
 +extern "C" void Gta2Port_MobileCameraLead(Car_BC* pCar, Fix16* pX, Fix16* pY); // mobile_camera_web.cpp
  void Gta2Port_ModernCameraTick(Camera_0xBC* cam);
++void Gta2Port_ModernCameraMoved(const Camera_0xBC* cam); // its position changed after the tick
 +void Gta2Port_MobileCameraPostTick(); // Camera.cpp, mode 2 (GTA2 Mobile)
  Fix16 Gta2Port_PresentedCameraZ(const Camera_0xBC* cam);
  // port_interpolation.cpp (D04)
  extern "C" s32 gGta2PortInterpolate;
+diff --git a/Source/port_modern_camera.cpp b/Source/port_modern_camera.cpp
+index 079ff633..4eb1a35f 100644
+--- a/Source/port_modern_camera.cpp
++++ b/Source/port_modern_camera.cpp
+@@ -165,6 +165,18 @@ void Gta2Port_ModernCameraTick(Camera_0xBC* cam)
+     s->canonical = cam->field_98_cam_pos2;
+ }
+ 
++// The camera was moved after its update (the Mobile camera's post-tick pin): keep the
++// position its copies are recognised by in step, or PresentedCameraZ falls back to the raw
++// height for the rest of the tick.
++void Gta2Port_ModernCameraMoved(const Camera_0xBC* cam)
++{
++    ModernState* s = Find(cam, false);
++    if (s)
++    {
++        s->canonical = cam->field_98_cam_pos2;
++    }
++}
++
+ // The height the camera is drawn from: Modern's filtered height (plus the
+ // player's bias) for a camera that is, or is a copy of, an updated camera.
+ Fix16 Gta2Port_PresentedCameraZ(const Camera_0xBC* cam)
 diff --git a/Source/winmain.cpp b/Source/winmain.cpp
 index e1e82223..46cc83e8 100644
 --- a/Source/winmain.cpp

@@ -8,7 +8,7 @@
 // game's "App_Executables" file group. Output: the game files, as transferable
 // ArrayBuffers keyed by lower-case relative path, the same layout as picking
 // an installed GTA2 folder. Nothing leaves the browser.
-import createUnshield from './unshield.js?v=eed2d29c51';
+import createUnshield from './unshield.js?v=c7916f70ec';
 
 const SIZE = 362331961;
 const SHA1 = '8c10c0d20f15912a9450b6fbe028f31928b29893';

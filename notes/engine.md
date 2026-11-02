@@ -163,6 +163,16 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   the whole update, before `Gta2Port_InterpTick`) puts the view camera on the followed
   sprite's position (+ look-ahead, + the shake the update applied) and refreshes the
   boundaries. Measured: camera − car 0.00 blocks at any speed.
+  **The drawn height is looked up by camera position** (2026-11-02): `Gta2Port_PresentedCameraZ`
+  finds the Modern filter state of a camera by comparing `field_98_cam_pos2` (x, y, z, zoom)
+  with the position stored at the camera's last `Gta2Port_ModernCameraTick` (the view camera is
+  a `memcpy` of the game camera, so it has no state of its own). The first post-tick pin moved
+  only the view camera, the lookup failed whenever the player moved and the height fell back to
+  the raw one: a snap 2 → 1 the moment you walk or drive, back to 2 when you stop (the user's
+  "si zooma di scatto"; headless: `camZ` 1.00..5.00 with 4-block frame jumps, the 5 being the
+  overlay's bias ramped to its clamp while the lookup failed). Fix: the post-tick moves the game
+  camera too and calls `Gta2Port_ModernCameraMoved(cam)` (port_modern_camera.cpp), which
+  re-stores the position the copies are matched by.
 - **HUD inset** (`gta2_port_set_hud_inset(refPx)`, port `frame.cpp`): the port anchors HUD parts
   to the screen edges by ±(width − 640)/2 reference px (side 0 left, 1 centre, 2 right); the
   inset pulls the anchored parts back in. The overlay sends its side padding (safe area / notch,
