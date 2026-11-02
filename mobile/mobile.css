@@ -466,6 +466,19 @@ html.gta-touch #map-radar {
   transform: scale(0.7);
   transform-origin: top right;
 }
+/* Car model label, under the weapon pills */
+#gtaCar {
+  position: absolute;
+  right: calc(var(--pad-r) + 64px);
+  top: calc(var(--pad-t) + 46px);
+  color: rgba(255, 255, 255, 0.75);
+  font: 700 11px/1 ui-monospace, Menlo, Consolas, monospace;
+  text-shadow: 0 0 3px #000;
+  pointer-events: none;
+}
+#gtaCar[hidden] {
+  display: none;
+}
 /* Weapon pill with ◀ ▶ in the top row, just left of the HUD's weapon icon (hidden in menu mode) */
 #gtaWeapons {
   position: absolute;

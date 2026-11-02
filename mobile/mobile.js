@@ -128,6 +128,7 @@
       <button type="button" class="gta-pill" id="gtaTune" aria-label="Tune controls">${ICONS.gear}</button>
       <button type="button" class="gta-pill" id="gtaTools" aria-label="Game toolbar">${ICONS.more}</button>
     </div>
+    <div id="gtaCar" hidden></div>
     <div id="gtaWeapons">
       <button type="button" class="gta-pill" id="gtaWeaponPrev" data-tap="KeyJ" aria-label="Previous weapon">◀</button>
       <button type="button" class="gta-pill" id="gtaWeapon">—</button>
@@ -723,6 +724,17 @@
   const weaponsEl = root.querySelector('#gtaWeapons');
   const weaponEl = root.querySelector('#gtaWeapon');
   let weaponSig = '';
+  // Car model label (under the top row): "Car <model index>" while driving, for reporting
+  // which models behave differently. The HUD shows the car's name when you get in.
+  const carEl = root.querySelector('#gtaCar');
+  let carSig = '';
+  function syncCar(d) {
+    const sig = d && d.inCar ? `Car ${d.carModel}` : '';
+    if (sig === carSig) return;
+    carSig = sig;
+    carEl.hidden = !sig;
+    carEl.textContent = sig;
+  }
   function syncWeapon(d) {
     const name = d ? (WEAPON_NAMES[d.weapon] || `Weapon ${d.weapon}`) : '';
     const label = !d ? '' : d.weapon < 0 ? WEAPON_NAMES[0] : `${name} (${Math.round(d.ammo / 10)})`;
@@ -767,6 +779,7 @@
     if (nextMode !== mode) { mode = nextMode; releaseHeld(); root.dataset.mode = mode; }
     devState = playing ? readDev() : null;
     syncWeapon(devState);
+    syncCar(devState);
     if (!soundApplied && g.audio) applySound(false); // default: muted until the pill is tapped
     const soundSig = `${soundOn}:${audioRunning()}`;
     if (soundSig !== soundRendered) { soundRendered = soundSig; renderSoundBtn(); }
