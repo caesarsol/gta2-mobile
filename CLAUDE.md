@@ -100,8 +100,18 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   (`port_modern_camera.cpp`). `gta2_port_set_camera(mode, bias)` adds `bias` (clamped −2…+4)
   to the drawn height immediately; `map.last.camZ` is that drawn height. `camTick` holds it at
   Tune `camFoot` (2) / `camCar` (4) with bias = target − (camZ − bias), eased between the two.
-  Beyond the clamp (fast cars) it drifts up a little. The toolbar's Camera / View distance
-  buttons are hidden on touch; `camLock = 0` restores the shell's stored camera.
+  Beyond the clamp (fast cars) it drifts up a little. The toolbar's View distance button is
+  hidden on touch; `camLock = 0` restores the shell's stored camera.
+- **Mobile camera = engine patch** (`engine/0026-*.patch`, `engine/port-web.patch`): the real
+  problem on a phone is the camera *lead* (`ApplyCarVelocityCameraOffset_436200` moves the
+  camera up to ~4 blocks ahead of a moving car and raises it with speed): the car ends up under
+  the thumb. Mode 2 skips that offset entirely (centred like on foot); `gta2_port_set_camera`
+  accepts 0/1/2, the shell's Camera button cycles Modern → Mobile → Classic (also a landing
+  option), touch defaults to `mobile`. **Needs a rebuilt `gta2.wasm`**: `engine/build.sh`
+  (Emscripten 6.0.12 + gta2_re + unshield, ~3 GB; the sandbox's classifier refused installing
+  the toolchain). Until rebuilt, mode 2 behaves as Modern. After a rebuild the root files are
+  the build output: our `index.html` hooks come back via `engine/patch-index.py`, and the
+  previous build goes under `old/<id>/` so existing save states still open.
 - The map screen (`gta2.map.open`) covers the game and pauses it; on touch only our map pill
   stays visible to close it (M). The shell's toolbar `#tools` is hidden on touch and toggled by
   the ⋯ pill (z-index above the overlay so its clicks land).

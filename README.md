@@ -7,7 +7,8 @@
 > car), FIRE / ENTER / JUMP-BRAKE buttons, top-bar pills (menu, map, fullscreen, sound, tune,
 > reload), the port's Saves screen top-left and the current weapon with ◀ ▶ top-right. It
 > skips the landing page and the front end straight into the game (Continue when a save
-> exists). With the phone locked in portrait the page turns itself to landscape (Tune panel:
+> exists). The engine gets a **Mobile camera** (centred on the car, no speed lead; `engine/`,
+> rebuilt with `engine/build.sh`). With the phone locked in portrait the page turns itself to landscape (Tune panel:
 > notch left / right / off). `index.html` only gains the home-screen metadata and `mobile/boot.js`; the rest of
 > the site is the upstream build. Append `?touch` to force the overlay on desktop, `?nointro`
 > to keep the landing page. Upstream README follows.
