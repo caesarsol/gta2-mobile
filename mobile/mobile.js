@@ -10,6 +10,7 @@
  *                  pointing behind a car = reverse (hysteresis)
  *   Right side   → FIRE (KeyL), ENTER/EXIT (Enter), JUMP/BRAKE (Space)
  *   Top bar      → saves, menu (Escape), map (KeyM), fullscreen, sound, tune, shell toolbar, reload
+ *   Map open     → map bar: close, zoom + / − (KeyE / KeyQ), You (Space), Reveal (KeyF), Clear (Delete)
  *   Top bar      → also the Saves screen (the port's own save states)
  *   Right, under the HUD → current weapon + ammo, ◀ ▶ = previous / next (KeyJ / KeyK)
  *
@@ -38,6 +39,7 @@
   const KEYS = {
     KeyW: { key: 'w' }, KeyS: { key: 's' }, KeyA: { key: 'a' }, KeyD: { key: 'd' },
     KeyL: { key: 'l' }, KeyJ: { key: 'j' }, KeyK: { key: 'k' }, KeyM: { key: 'm' },
+    KeyE: { key: 'e' }, KeyQ: { key: 'q' }, KeyF: { key: 'f' }, Delete: { key: 'Delete' },
     Space: { key: ' ' }, Enter: { key: 'Enter' }, Escape: { key: 'Escape' },
     ArrowUp: { key: 'ArrowUp' }, ArrowDown: { key: 'ArrowDown' }, ArrowLeft: { key: 'ArrowLeft' }, ArrowRight: { key: 'ArrowRight' },
   };
@@ -130,6 +132,14 @@
       <button type="button" class="gta-pill" id="gtaTools" aria-label="Game toolbar">${ICONS.more}</button>
     </div>
     <div id="gtaCar" hidden></div>
+    <div id="gtaMapBar">
+      <button type="button" class="gta-pill is-on" data-tap="KeyM" aria-label="Close map (M)">${ICONS.map}</button>
+      <button type="button" class="gta-pill" data-tap="KeyE" aria-label="Zoom in">+</button>
+      <button type="button" class="gta-pill" data-tap="KeyQ" aria-label="Zoom out">−</button>
+      <button type="button" class="gta-pill" data-tap="Space" aria-label="Centre on you">You</button>
+      <button type="button" class="gta-pill" id="gtaMapReveal" data-tap="KeyF" aria-label="Show all / only what you have seen">Reveal</button>
+      <button type="button" class="gta-pill" id="gtaMapClear" data-tap="Delete" aria-label="Clear the waypoint">Clear</button>
+    </div>
     <div id="gtaWeapons">
       <button type="button" class="gta-pill" id="gtaWeaponPrev" data-tap="KeyJ" aria-label="Previous weapon">◀</button>
       <button type="button" class="gta-pill" id="gtaWeapon">—</button>
@@ -832,7 +842,12 @@
       if (mapOpen) { root.dataset.screen = 'map'; releaseAll(); if (stickId !== null) endStick(); } else delete root.dataset.screen;
       root.querySelector('#gtaMap').classList.toggle('is-on', mapOpen);
     }
-    if (mapOpen) return;
+    if (mapOpen) {
+      // the map bar's state: Reveal on/off, Clear only when there is a waypoint
+      root.querySelector('#gtaMapReveal').classList.toggle('is-on', !!g.map.reveal);
+      root.querySelector('#gtaMapClear').classList.toggle('gta-pill--dim', !g.map.waypoint);
+      return;
+    }
     const s = live();
     const playing = !!(s && s.hasPlayer);
     const nextMode = playing ? 'play' : 'menu';

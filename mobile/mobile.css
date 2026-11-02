@@ -137,10 +137,20 @@ html.gta-rotate #gtaReload {
 #gtaMobile[hidden] {
   display: none;
 }
-/* Map screen open: only the map pill stays, to close it */
-#gtaMobile[data-screen='map'] > :not(#gtaTopBar),
-#gtaMobile[data-screen='map'] #gtaTopBar > :not(#gtaMap) {
+/* Map screen open: only the map bar stays (close, zoom, you, reveal, clear) */
+#gtaMobile[data-screen='map'] > :not(#gtaMapBar) {
   display: none;
+}
+#gtaMapBar {
+  display: none;
+  position: absolute;
+  top: var(--pad-t);
+  left: calc(var(--pad-l) + 70px);
+  gap: 6px;
+  pointer-events: none;
+}
+#gtaMobile[data-screen='map'] #gtaMapBar {
+  display: flex;
 }
 
 /* ---- Bottom-left: fixed joystick ----
