@@ -694,29 +694,70 @@
   }
   window.gtaRotation = () => rotation;
 
-  // The shell's map screen reads e.clientX/Y against its (layout-sized) rect: under the forced
-  // rotation those are screen coordinates, so taps, drags and the waypoint would land wrong.
-  // Re-dispatch pointer events aimed at the map canvas with coordinates mapped into the page
-  // frame (the inverse of the body transform), once (marked), before the map's own listeners.
+  // The shell's map screen reads e.clientX/Y against its (layout-sized) rect and knows one
+  // pointer (drag to pan, tap for a waypoint). Pointer events aimed at the map canvas are
+  // intercepted on window (capture) and re-dispatched once, marked, with coordinates mapped
+  // into the page frame (inverse of the body transform under the forced rotation), and a
+  // second finger turns the gesture into a pinch zoom (map.zoomBy around the midpoint, plus
+  // the pan of the midpoint) that the map never sees: its drag is ended first with a
+  // synthetic move + up (moved, so no waypoint), and nothing is forwarded until all fingers lift.
   const screenToPage = (sx, sy) => {
     const W = document.body.clientWidth, H = document.body.clientHeight; // page frame (sides swapped)
     if (rotation === 1) return [sy, H - sx];
     if (rotation === -1) return [W - sy, sx];
     return [sx, sy];
   };
+  const mapPointers = new Map(); // pointerId → [px, py]
+  let pinch = null; // { dist, mid: [x, y] } while two fingers are down; 'done' until all lift
+  const forwardPointer = (e, type, px, py) => {
+    const ev = new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerId: e.pointerId, pointerType: e.pointerType,
+      isPrimary: e.isPrimary, button: e.button, buttons: e.buttons, clientX: px, clientY: py,
+      screenX: e.screenX, screenY: e.screenY, pressure: e.pressure, width: e.width, height: e.height,
+    });
+    ev.__gtaForwarded = true;
+    e.target.dispatchEvent(ev);
+  };
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
     window.addEventListener(type, (e) => {
-      if (!rotation || e.__gtaRotated || !e.target || e.target.id !== 'map-screen') return;
+      if (e.__gtaForwarded || !e.target || e.target.id !== 'map-screen') return;
       e.stopImmediatePropagation();
       e.preventDefault();
       const [px, py] = screenToPage(e.clientX, e.clientY);
-      const ev = new PointerEvent(type, {
-        bubbles: true, cancelable: true, composed: true, pointerId: e.pointerId, pointerType: e.pointerType,
-        isPrimary: e.isPrimary, button: e.button, buttons: e.buttons, clientX: px, clientY: py,
-        screenX: e.screenX, screenY: e.screenY, pressure: e.pressure, width: e.width, height: e.height,
-      });
-      ev.__gtaRotated = true;
-      e.target.dispatchEvent(ev);
+      const g = G();
+      const map = g && g.map;
+      if (type === 'pointerdown') mapPointers.set(e.pointerId, [px, py]);
+      else if (type === 'pointermove' && mapPointers.has(e.pointerId)) mapPointers.set(e.pointerId, [px, py]);
+      if (mapPointers.size >= 2 && map) {
+        const pts = [...mapPointers.values()];
+        const dist = Math.hypot(pts[0][0] - pts[1][0], pts[0][1] - pts[1][1]);
+        const mid = [(pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2];
+        if (!pinch || pinch === 'done') {
+          // end the map's own drag without a waypoint: a move (moved) then an up, for the first finger
+          const first = [...mapPointers.keys()][0];
+          if (first !== e.pointerId || type !== 'pointerdown') { /* first finger already had its down */ }
+          const fe = { pointerId: first, pointerType: e.pointerType, isPrimary: true, button: 0, buttons: 0, screenX: 0, screenY: 0, pressure: 0, width: 1, height: 1, target: e.target };
+          const fp = mapPointers.get(first);
+          forwardPointer(fe, 'pointermove', fp[0] + 8, fp[1] + 8);
+          forwardPointer(fe, 'pointerup', fp[0] + 8, fp[1] + 8);
+          pinch = { dist, mid };
+        } else if (type === 'pointermove' && dist > 0 && pinch.dist > 0) {
+          const r = e.target.getBoundingClientRect();
+          const f = dist / pinch.dist;
+          if (Math.abs(f - 1) > 0.002) map.zoomBy(f, mid[0] - r.left, mid[1] - r.top);
+          map.view.cx -= (mid[0] - pinch.mid[0]) / map.view.scale;
+          map.view.cy -= (mid[1] - pinch.mid[1]) / map.view.scale;
+          pinch = { dist, mid };
+        }
+      }
+      if (type === 'pointerup' || type === 'pointercancel') {
+        mapPointers.delete(e.pointerId);
+        if (pinch && pinch !== 'done') pinch = 'done';
+        if (mapPointers.size === 0) { const wasPinch = pinch === 'done'; pinch = null; if (wasPinch) return; }
+        else if (pinch === 'done') return;
+      }
+      if (pinch) return; // two fingers (or the tail of a pinch): the map sees nothing
+      forwardPointer(e, type, px, py);
     }, true);
   }
 
