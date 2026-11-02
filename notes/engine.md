@@ -83,13 +83,18 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   backs up straight. Co-op: the override changes the local car's inputs, so peers must run the
   same build (accepted). `mobile.js` clears the target (−1) whenever the stick is idle,
   released, on foot or hidden.
-- **Skidding with the stick (open, 2026-11)**: the override holds full lock until within 1.5°,
-  so every correction at speed is a full-lock jab plus a counter-jab — the "sbandata" the user
-  feels. Clean measurements are still owed (see `notes/testing.md`, hygiene). Partial data on
-  the long road at 0.37 blocks/tick (model 25), 25° lane change: stick → slip 13–18°, keyboard
-  100 ms taps → 3°, 300 ms swerve → 8–13°. Proposed fixes, not yet chosen: (1) proportional
-  duty-cycle steering in the override for small errors; (2) slew-rate-limited target in the
-  overlay; (3) lift the gas while the error is large at speed.
+- **Skidding with the stick — measured (2026-11, clean runs, long road, model 25 at
+  0.38 blocks/tick, 25° swerve for 0.5 s and back)**: stick with the engine steering at full
+  lock → max slip 9°, heading peak 22°, settled within 1° in ~1.4 s; keyboard 100 ms taps (3 + 3)
+  → slip 8°, peak 20°; keyboard A/D held 300 ms → slip 10°, peak 19°. So the stick does **not**
+  slide more than a keyboard player on this car; the "sbandate" felt on the phone were partly
+  **collisions with traffic** (speed collapsing 0.38 → 0.1 in a tick, then a 20–40° slide) and
+  partly the full-lock jab feel. **Soft zone (`gta2_port_set_steer_ramp(units)`, Tune
+  `steerRamp`, default 20°)**: within that angle of the target the key is pulsed by a sigma-delta
+  modulator with duty |predicted| / ramp (a quarter of the ticks at a quarter of the ramp), full
+  lock beyond. Measured on the same swerve: slip 7°, peak 17°, settled 0.7° in ~1.6 s — a bit
+  gentler, slightly slower; 0 = the old behaviour. Small cars with a high turn ratio were not
+  measured yet. `gta2_port_steer_debug()[3]` is now the key actually sent that tick.
 - The overlay shows `Car <model>` under the weapon pills while driving (model = handling index).
 
 ## Camera
@@ -151,4 +156,5 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   one-block road). Test in the open square before concluding anything about car dynamics.
 - 2026-11: `map.last.inCar` ≠ "driving" during the door walk; the dev state is.
 - 2026-11: speed collapses at full speed on the long road were traffic / abandoned test cars
-  from previous probes (autosave Continue), not the steering override.
+  from previous probes (autosave Continue), not the steering override. Confirmed with clean
+  runs: the collapse happens with keyboard steering too, and never without a car ahead.

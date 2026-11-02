@@ -47,28 +47,35 @@ node scripts/headless.js                                        # smoke test: cl
    and parked cars**, so a lane change can hit something: repeat on 2–3 offsets along the road
    and discard runs whose speed collapses with no steering input. Start from a corner only if
    the turn goes *into* the square.
-3. **Entering a car**: `h.enterCar(h, model, dx, dy, rot)` waits for `map.last.inCar` **and**
+3. **One car per game.** `exit → teleport → spawn → enter` in the same game is unreliable:
+   Enter is ignored while the car rolls, `gta2_dev_teleport` is refused while the ped is seated
+   (`get_car` still set during the exit animation, when `hasPlayer` even flickers false), and a
+   car spawned next to the old one wedges both (nothing moves, every later variant reads
+   "speed 0"). For a series of runs call `h.startClean()` **before each run** (~15 s with the
+   game files cached) and teleport once, on foot. `h.exitCar` / the retrying `h.teleport` help
+   but do not make the sequence reliable.
+4. **Entering a car**: `h.enterCar(x, model, dx, dy, rot)` (x = the harness) waits for `map.last.inCar` **and**
    the dev state (`gta2_dev_state` inCar). `map.last.inCar` is true from the moment the ped
    starts walking to the door; for ~4.5 s the dev state still says "no car" and the overlay's
    **on-foot** controller runs. Model 10 = plain car, 25 = fast, 20 = cannot be entered.
    Spawn each car on a fresh spot (another `dy`, or another offset along the road).
-4. **Teleport then wait**: `h.teleport(page, x, y)` waits until the camera has arrived
+5. **Teleport then wait**: `h.teleport(page, x, y)` waits until the camera has arrived
    (`|player − cam| < 0.3`; it pans at a limited speed, up to ~30 s). Camera-relative
    measurements before that are noise.
-5. **Record per frame**: `const r = await h.record(page, ms)` → `await r.rows()`: `t`,
+6. **Record per frame**: `const r = await h.record(page, ms)` → `await r.rows()`: `t`,
    `heading` (deg), `x`, `y` (blocks), `speed` (blocks/tick, magnitude), `keys` held, `steer`
    (engine steering debug `[active, error, omega, decision]`), stick `gear` / `mode`. Velocity
    direction from positions is `atan2(dx, dy)` (map coords, y down; forward = `(sin a, cos a)`);
    slip angle = that − heading. Sampling is per animation frame (≈ 1–2 engine ticks at 30 Hz):
    a key *tapped* inside one frame is invisible to a per-frame `keys` sample — log the events
    (`keydown`/`keyup` listeners) when you need to know what was pressed.
-6. **Compare against the engine alone** (keyboard keys, no stick) in the same place and at the
+7. **Compare against the engine alone** (keyboard keys, no stick) in the same place and at the
    same speed before blaming the overlay: W + a 150 ms A tap shows how the car reacts to one
    tick of steering; A held 300 ms is a "hard" keyboard swerve.
-7. **Screenshots** (`page.screenshot`) for layout checks; read them (the Read tool shows PNGs).
+8. **Screenshots** (`page.screenshot`) for layout checks; read them (the Read tool shows PNGs).
    Fixed-position elements have `offsetParent === null`: test visibility with `hidden` +
    `getComputedStyle().display`, not `offsetParent`.
-8. Keep probes in the scratchpad, not the repo; when a probe becomes a recurring check, move
+9. Keep probes in the scratchpad, not the repo; when a probe becomes a recurring check, move
    it to `scripts/` with a one-line description in this file.
 
 ## Where things are (this sandbox)
@@ -96,3 +103,13 @@ node scripts/headless.js                                        # smoke test: cl
   one may; `pgrep -fc chrom` then kill by pid.
 - Autostart's Continue card appears ~2.5 s after the landing page; `startGame` waits for
   `hasPlayer`, so a probe never has to click anything on the landing page itself.
+- After a fresh unpack the game starts while the 60 MB IndexedDB write is still in flight;
+  closing the browser right after "ready" left the cache incomplete and the next run downloaded
+  again (seen twice before `startGame` learned to wait for the `complete` marker).
+- Piping node through `grep` without `--line-buffered` into a file shows nothing until exit; a
+  `timeout`-killed probe then leaves an empty log. Use `grep --line-buffered` or no grep.
+- The helpers take the harness object returned by `launch()` (`x`), not the module (`h`):
+  `h.enterCar(x, …)`, `x.stickAt(…)`. Mixing them up fails with "reading 'evaluate'".
+- The open square (`findOpen`) is 19 blocks with objects inside: cars reach ~0.1 blocks/tick
+  and hit something within 3 blocks from the corner. Use it for low-speed turning only; speed
+  tests go on the long road, started fresh per run, with 2–3 repeats to drop traffic hits.
