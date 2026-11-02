@@ -13,6 +13,13 @@ node scripts/headless.js                                        # smoke test: cl
 
 - The site server (`python3 -m http.server 8124` from the repo root) **dies between turns** in
   the sandbox (it belongs to the shell that started it): the script restarts it when needed.
+  **It must serve this checkout**: a server started from another directory (the GTA.js project
+  uses `/home/user` on :8123, easy to mix up) answers on the port, `cleanSaves` "works" on any
+  page and `startGame` waits 15 minutes for nothing. `dev-servers.sh` and `h.launch()` both
+  check that the served `gta2.wasm` is ours (size) and `mobile/boot.js` exists; the script
+  stops a wrong-root server by pid and starts ours, `launch()` starts ours when nothing answers
+  and **refuses to run** otherwise (also when `INSTALLER_MIRROR` is set but dead). Never start
+  the server by hand with a bare `nohup`: use the script.
 - **Always use the installer mirror.** The game downloads the 346 MB freeware installer from
   archive.org on the first visit of a browser profile; through the sandbox proxy that runs at
   ~1 MB/min (hours). `scripts/installer-mirror.py` serves a local copy over plain HTTP with CORS
@@ -27,8 +34,11 @@ node scripts/headless.js                                        # smoke test: cl
   new sandbox: when `node scripts/headless.js` logs "Downloading GTA2…", the profile is gone,
   not broken. With the mirror a fresh unpack takes ~20 s.
 - One Chromium per profile: two probes at once on the same `PROFILE_DIR` fail. Run probes
-  sequentially; kill leftovers by pid. `pkill -f <pattern>` that also matches your own shell
-  command line kills the shell (exit 144): use `pgrep -f` → `kill`, or `curl` checks.
+  sequentially; kill leftovers by pid. `pkill -f <pattern>` **or `pgrep -f`** with a pattern
+  that also appears in your own shell command line (even in another part of the same `bash -c`,
+  e.g. the `nohup python3 -m http.server 8124` that restarts it) kills the shell (exit 144):
+  find the owner of a port with `lsof -ti tcp:8124 -sTCP:LISTEN` (or `fuser -n tcp 8124`;
+  `ss` is not installed here), or put the commands in a script file.
 - Device: iPhone 13, 844×390 landscape (`VIEWPORT=390x844` for the forced-landscape tests),
   `hasTouch`, `--use-gl=swiftshader`. Touches go through CDP `Input.dispatchTouchEvent`
   (`h.touch`, `h.tap(selector)`, `h.stickDown / stickAt(heading, radius) / stickUp`); keys
@@ -124,3 +134,12 @@ node scripts/headless.js                                        # smoke test: cl
   `(run * 3) % 4` or shuffle, and judge by the clean repeats.
 - Slip on the long road scatters ±4° between clean runs at the same settings; a difference
   needs 3 clean runs per variant (speed must not collapse before the swerve or after it).
+- **2026-11-02, the wrong-root server.** The :8124 server had died with the turn; it was
+  restarted from `/home/user` (the GTA.js habit) and a probe spent its full 15-minute
+  `startGame` budget on a directory listing, with no error, because `cleanSaves` only needs
+  *a* page and a bare `curl` exits 0 on a 404. Now both `dev-servers.sh` and `launch()`
+  verify the served `gta2.wasm` is this checkout's, and `launch()` refuses to run against
+  anything else (see Setup). Lesson: a check that only tests "something answers" is no check.
+- Car models for `h.enterCar(x, model)` are the handling index (`car_model_enum`,
+  `Source/enums.hpp`): 10 BUICK (plain), 12 COPCAR (police), 25 HOTDOG_D2 (the fast one used
+  in the steering measurements), 83 ZCX5 (the Zaibatsu Z-Type).

@@ -6,21 +6,63 @@
  *   const h = require('./scripts/headless'); → reuse helpers in ad-hoc probes
  *
  * Before a run: `source <(scripts/dev-servers.sh /path/to/GTA2INSTALLER.exe)` starts the site
- * server (127.0.0.1:8124) and the installer mirror, and exports INSTALLER_MIRROR. Read
- * notes/testing.md first: probe hygiene (clean saves, where to drive, what to wait for).
+ * server (127.0.0.1:8124) and the installer mirror, and exports INSTALLER_MIRROR. launch()
+ * checks that the site serves this checkout (and starts it from here if nothing answers) and
+ * that the mirror answers; it refuses to run otherwise. Read notes/testing.md first: probe
+ * hygiene (clean saves, where to drive, what to wait for).
  *
  * The browser profile persists in PROFILE_DIR, so the 346 MB installer is unpacked once
  * (IndexedDB, ~67 MB). With INSTALLER_MIRROR=<url> the archive.org installer request is
  * redirected (Playwright route → 302) to that URL (scripts/installer-mirror.py) instead of the
  * slow Internet Archive.
  */
+const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const { chromium, devices } = require('playwright');
 
 const DEFAULT_URL = 'http://127.0.0.1:8124/';
 const PROFILE_DIR = process.env.PROFILE_DIR || path.join(require('os').tmpdir(), 'gta2-mobile-profile');
+const ROOT = path.join(__dirname, '..');
+
+// The site must be served from THIS checkout's root. A server started elsewhere (another
+// project's root, /home/user) answers on the same port: cleanSaves "works" on any page and
+// startGame then waits 15 minutes for a game that never loads (happened once: 2026-11-02).
+// So before launching: the served gta2.wasm must be this checkout's (same size), the site is
+// started here when nothing answers, and anything else is a loud failure. The installer mirror,
+// when set, must answer too (a dead mirror = a download that never finishes).
+async function ensureServers(url) {
+  const head = async (u) => { try { return await fetch(u, { method: 'HEAD' }); } catch { return null; } };
+  const servesThisRepo = async () => {
+    const boot = await head(new URL('mobile/boot.js', url).href);
+    const wasm = await head(new URL('gta2.wasm', url).href);
+    if (!boot || !boot.ok || !wasm || !wasm.ok) return false;
+    return Number(wasm.headers.get('content-length')) === fs.statSync(path.join(ROOT, 'gta2.wasm')).size;
+  };
+  const u = new URL(url);
+  if (!(await servesThisRepo())) {
+    if (await head(url)) {
+      throw new Error(`[headless] ${url} answers but does not serve this checkout (${ROOT}): another server owns port ${u.port}. ` +
+        `Run scripts/dev-servers.sh (it stops that server and starts ours), then retry.`);
+    }
+    if (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost') throw new Error(`[headless] ${url} does not answer`);
+    console.log(`[headless] starting the site server on :${u.port} from ${ROOT}`);
+    const child = spawn('python3', ['-m', 'http.server', u.port, '--bind', '127.0.0.1'], { cwd: ROOT, detached: true, stdio: 'ignore' });
+    child.unref();
+    for (let i = 0; i < 40 && !(await servesThisRepo()); i++) await new Promise((r) => setTimeout(r, 250));
+    if (!(await servesThisRepo())) throw new Error(`[headless] could not start the site server on :${u.port} from ${ROOT}`);
+  }
+  if (process.env.INSTALLER_MIRROR) {
+    let r = null;
+    try { r = await fetch(process.env.INSTALLER_MIRROR, { headers: { Range: 'bytes=0-0' } }); } catch { /* down */ }
+    if (!r || !(r.status === 200 || r.status === 206)) {
+      throw new Error(`[headless] INSTALLER_MIRROR=${process.env.INSTALLER_MIRROR} does not answer: run scripts/dev-servers.sh /path/to/GTA2INSTALLER.exe first.`);
+    }
+  }
+}
 
 async function launch({ url = DEFAULT_URL } = {}) {
+  await ensureServers(url);
   const args = ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'];
   // VIEWPORT=390x844 for a portrait phone (forced-landscape tests); landscape by default.
   const [vw, vh] = (process.env.VIEWPORT || '844x390').split('x').map(Number);
