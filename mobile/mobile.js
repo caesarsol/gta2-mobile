@@ -316,8 +316,8 @@
       help: 'Cars only. If the stick points more than this behind the car, you reverse toward it instead of U-turning. Drawn as the dashed red sector.' },
     { k: 'revExit', label: 'Reverse · exit (°)', def: 100, step: 5, min: 60, max: 180,
       help: 'Leave reverse when the stick comes back within this angle. Keep it below "Reverse · enter" (hysteresis).' },
-    { k: 'camLock', label: 'Camera · fixed height', def: 1, step: 1, min: 0, max: 1,
-      help: 'GTA1-style camera: the height no longer rises and falls with speed. 1 = on (the heights below), 0 = the port\'s own camera.' },
+    { k: 'camLock', label: 'Camera · fixed height', def: 1, step: 1, min: 0, max: 1, bool: true,
+      help: 'GTA1-style camera: the height no longer rises and falls with speed. true = on (the heights below), false = the port\'s own camera.' },
     { k: 'camFoot', label: 'Camera · on foot (blocks)', def: 2, step: 0.5, min: 1, max: 5,
       help: 'Camera height on foot when the fixed camera is on. The game\'s own is 1.' },
     { k: 'camCar', label: 'Camera · in a car (blocks)', def: 4, step: 0.5, min: 1, max: 5,
@@ -622,7 +622,8 @@
   // ---------- Tune panel: −/+ steppers for every tunable, persisted ----------
   const tunePanel = root.querySelector('#gtaTunePanel');
   const tuneRows = tunePanel.querySelector('.gta-tune-rows');
-  const fmtVal = (d, v) => (d.step < 1 ? v.toFixed(1) : String(Math.round(v)));
+  // booleans (def.bool) read true/false, fractional steppers one decimal, the rest integers
+  const fmtVal = (d, v) => (d.bool ? (v ? 'true' : 'false') : d.step < 1 ? v.toFixed(1) : String(Math.round(v)));
   // Labels are "Group · item": the rows are grouped under a title per group, flowing in columns
   // so a group stays together (the groups follow TUNE_DEFS order).
   function renderTune() {
