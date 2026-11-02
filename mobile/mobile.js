@@ -100,6 +100,7 @@
     reload: svg('M17.65 6.35A7.96 7.96 0 0012 4a8 8 0 108 8h-2a6 6 0 11-1.76-4.24L13 11h7V4l-2.35 2.35z'),
     more: svg('M6 10a2 2 0 100 4 2 2 0 000-4zm12 0a2 2 0 100 4 2 2 0 000-4zm-6 0a2 2 0 100 4 2 2 0 000-4z'),
     close: svg('M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'),
+    upgrade: svg('M16 18v2H8v-2h8zM11 7.99V16h2V7.99h3L12 4 8 7.99h3z'),
   };
   window.gtaIcons = ICONS;
 
@@ -131,6 +132,7 @@
       <button type="button" class="gta-pill" id="gtaSound" aria-label="Sound on/off">${ICONS.soundOff}</button>
       <button type="button" class="gta-pill" id="gtaTune" aria-label="Tune controls">${ICONS.gear}</button>
       <button type="button" class="gta-pill" id="gtaTools" aria-label="Game toolbar">${ICONS.more}</button>
+      <button type="button" class="gta-pill gta-pill--primary" id="gtaLatest" aria-label="Back to the latest version" hidden>${ICONS.upgrade}</button>
     </div>
     <div id="gtaCar" hidden></div>
     <div id="gtaMapBar">
@@ -240,6 +242,19 @@
     const b = document.getElementById('saves-open');
     if (b) b.click();
   });
+  // Save states belong to the engine build that made them: the Saves screen opens an older
+  // save's build in old/<build>/ with window.open(…, '_blank'). A new tab is useless on a phone
+  // and, from a home-screen app, lands in Safari (own storage: the game files again). Same tab.
+  const ARCHIVED = /\/old\/[0-9a-f]+\/$/.test(location.pathname); // this page is an archived build
+  const nativeOpen = window.open.bind(window);
+  window.open = (url, target, features) => {
+    if (typeof url === 'string' && /^old\/[0-9a-f]+\/$/.test(url)) { location.assign(url); return window; }
+    return nativeOpen(url, target, features);
+  };
+  // In an archived build (no browser chrome in a home-screen app): a pill back to the latest.
+  const latestBtn = root.querySelector('#gtaLatest');
+  latestBtn.hidden = !ARCHIVED;
+  onTap(latestBtn, () => location.assign(new URL('../../', location.href).href));
   // The shell's own toolbar (camera, view distance, minimap, FPS, saves export/import,
   // controls, language…), hidden on touch: this pill shows it at the bottom.
   const toolsBtn = root.querySelector('#gtaTools');
