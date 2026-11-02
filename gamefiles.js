@@ -5,7 +5,7 @@
 // like any other site data. A "complete" marker is written last, so an
 // interrupted copy is never used. "Forget game files" deletes the copy.
 
-import { lang, registerDict, t } from './strings.js?v=8b66ef1f5d';
+import { lang, registerDict, t } from './strings.js?v=e7a073e130';
 
 // ui.files.badSize / checksum / unpackFailed / noFiles are the keys web/installer-worker.js
 // sends back; the worker has no access to the language, so they are translated here.
@@ -118,7 +118,7 @@ export async function unpackInstallerFile(file, onProgress) {
 }
 
 async function unpackInstaller(buf, onProgress) {
-  const worker = new Worker(new URL('./installer-worker.js?v=8b66ef1f5d', import.meta.url), { type: 'module' });
+  const worker = new Worker(new URL('./installer-worker.js?v=e7a073e130', import.meta.url), { type: 'module' });
   try {
     const files = await new Promise((resolve, reject) => {
       worker.onmessage = (e) => {

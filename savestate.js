@@ -16,7 +16,7 @@
 // core rebuild what lives in the browser (textures, sounds, clock; savestate_web.cpp). A snapshot
 // only fits the build that made it, so each one records a hash of gta2.wasm.
 
-import { lang, registerDict, t } from './strings.js?v=8b66ef1f5d';
+import { lang, registerDict, t } from './strings.js?v=e7a073e130';
 
 const DB_NAME = 'gta2-port-states';
 const STORE = 'states';
@@ -167,7 +167,7 @@ let buildPromise = null;
 /** This build's identity: the SHA-256 of gta2.wasm (the snapshot's memory layout depends on it). */
 function buildId() {
   if (!buildPromise) {
-    buildPromise = fetch(new URL('gta2.wasm?v=8b66ef1f5d', import.meta.url))
+    buildPromise = fetch(new URL('gta2.wasm?v=e7a073e130', import.meta.url))
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(t('ui.save.buildId', { status: r.status })))))
       .then((buf) => crypto.subtle.digest('SHA-256', buf))
       .then((d) => Array.from(new Uint8Array(d).slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join(''))
