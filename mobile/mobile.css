@@ -429,7 +429,12 @@ html.gta-rotate #gtaReload {
   color: #fff;
   font: 14px/1.35 ui-monospace, Menlo, Consolas, monospace;
   pointer-events: auto;
-  touch-action: pan-y;
+  /* Scrolls natively (touchmove is not cancelled inside .gta-panel). Not pan-y: under the
+     forced landscape the body is rotated and pan-y is a screen axis, so the panel's own
+     vertical scroll was blocked on a locked-portrait phone. */
+  touch-action: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 .gta-panel[hidden] {
   display: none;
