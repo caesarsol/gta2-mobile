@@ -7,7 +7,7 @@
 // stored in IndexedDB in a single transaction, keeping the previous version
 // under "<path>#prev" so an interrupted or bad save can be recovered.
 
-import { registerDict, t } from './strings.js?v=d0544e5b4b';
+import { registerDict, t } from './strings.js?v=8b66ef1f5d';
 
 registerDict({
   en: {

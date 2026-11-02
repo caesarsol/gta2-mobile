@@ -463,15 +463,24 @@
   }
 
   // Engine-side parameters (Tune): steering momentum look-ahead (ticks) and dead band (degrees →
-  // Ang16 units); Mobile camera look-ahead (ticks, capped at 3 blocks in the engine).
+  // Ang16 units); Mobile camera look-ahead (ticks, capped at 3 blocks in the engine); HUD edge
+  // inset = the overlay's side padding (safe area / notch, at least 20 px) in the game's
+  // reference pixels (480 per canvas height).
+  const padProbe = document.createElement('div');
+  padProbe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;height:0;width:var(--pad-l)';
+  root.appendChild(padProbe);
   let steerParamsSent = '';
   function applySteerParams() {
     const g = G();
     if (!g || !g.Module) return;
-    const sig = `${T.steerKd}:${T.steerBand}:${T.camLead}`;
+    const canvas = document.getElementById('screen');
+    const padL = Math.max(20, padProbe.offsetWidth || 0);
+    const hudInset = canvas && canvas.clientHeight ? Math.round(padL * 480 / canvas.clientHeight) : 0;
+    const sig = `${T.steerKd}:${T.steerBand}:${T.camLead}:${hudInset}`;
     if (sig === steerParamsSent) return;
     try { g.Module.ccall('gta2_port_set_steer_params', null, ['number', 'number'], [Math.round(T.steerKd), Math.round(T.steerBand * 4)]); } catch { /* older engine */ }
     try { g.Module.ccall('gta2_port_set_camera_lead', null, ['number', 'number'], [T.camLead, 3]); } catch { /* older engine */ }
+    try { g.Module.ccall('gta2_port_set_hud_inset', null, ['number'], [hudInset]); } catch { /* older engine */ }
     steerParamsSent = sig;
   }
   // The engine-side steering target (Ang16 units, 4 per degree; -1 = off). Sent only on change.
