@@ -1,8 +1,8 @@
 // The Saves screen (single player): the autosave and six slots, each a card with a picture of
 // the moment, the area, district, cash and wanted level. Save here, load or delete; the game is
 // paused while it is open. Opened (and closed) with Ctrl+S / ⌘S or F5, or the toolbar's Saves button.
-import { LOAD_KEY, SAVE_KEY, SAVE_MIN_COST, SLOTS, deleteSave, listSaves, money, num, saveCost, slotName } from './savestate.js?v=f0853dec29';
-import { lang, onLangChange, registerDict, t } from './strings.js?v=f0853dec29';
+import { LOAD_KEY, SAVE_KEY, SAVE_MIN_COST, SLOTS, deleteSave, listSaves, money, num, saveCost, slotName } from './savestate.js?v=eed2d29c51';
+import { lang, onLangChange, registerDict, t } from './strings.js?v=eed2d29c51';
 
 registerDict({
   en: {
@@ -104,7 +104,7 @@ export function describe(save) {
 export class SavesScreen {
   /**
    * @param {object} opts
-   * @param {import('./savestate.js?v=f0853dec29').SaveStates} opts.states
+   * @param {import('./savestate.js?v=eed2d29c51').SaveStates} opts.states
    * @param {(paused: boolean) => void} opts.pause pauses the game and its sound (as the map screen does)
    * @param {() => void} opts.onClose gives the keyboard back to the game
    */

@@ -4,7 +4,7 @@
 // downloaded. Read-only towards the game, apart from pausing it while the map
 // screen is open.
 
-import { lang, registerDict, t } from './strings.js?v=f0853dec29';
+import { lang, registerDict, t } from './strings.js?v=eed2d29c51';
 
 registerDict({
   en: {
