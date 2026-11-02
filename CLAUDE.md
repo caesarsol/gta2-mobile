@@ -72,7 +72,11 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   entered**), `gta2_dev_teleport(x,y)`, `gta2_dev_find_road()`, `gta2_dev_give_weapon(kind,ammo)`
   (kind = weapon idx; it does not select it), `gta2_dev_add_cash(n)`.
 - Entering a car takes about **4.5 s** (walk to the door + animation): wait that long in probes.
-  Getting out is immediate.
+  Getting out is immediate. While the ped walks to the door `map.last.inCar` is already true
+  but `gta2_dev_state` still says no car: probes must wait for the dev state too.
+- **In a car only a car weapon fires** (weapon idx ≥ 15: car MG, oil, mines, bombs, tank gun…;
+  `Ped::GetWeaponFromPed_46F110`); the ped's own weapon is just carried along. The overlay hides
+  Fire and the ◀ weapon ▶ pills in an unarmed car (`canFire`).
 - Heading `a`: forward on screen = `(sin a, −cos a)`; `a = π` faces screen-up; +x is
   screen-right, +y screen-down; the camera is top-down and axis-aligned (verified visually).
   Stick math is identical to gta-js-mobile. **Verified:** `A` increases `a` (turn left), on foot
@@ -85,8 +89,11 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   late, so a hold-until-aligned controller oscillates ±20° forever, whatever the threshold
   (measured 1.20 ↔ 1.89 rad around 1.57). The overlay **holds** the key while far, releases it
   `stopAhead` (~0.3 rad, measured) early, then **taps** one tick at a time (~0.09 rad each,
-  measured) with ~110 ms to settle. Converges in ~0.5 s with no overshoot. **Cars are steered
-  by the engine** (next points): the overlay only sends the target heading and holds W / S.
+  measured) with ~110 ms to settle. Converges in ~0.5 s with no overshoot. On foot the stick has
+  two rings: inside `ringAim` (60 px) the ped only turns (aim and shoot); beyond it the ped turns
+  on the spot first and walks once within `walkStart` (20°) of the direction (stops again beyond
+  2×). Turning in place at 90° takes ~1 s, no displacement. **Cars are steered by the engine**
+  (next points): the overlay only sends the target heading and holds W / S, at any distance.
 - **Car steering jitter: root cause (verified in open ground).** Cars have **yaw momentum**:
   after the steering key is released the heading keeps turning ~10° at low speed (more at
   speed, more for small cars with a high turn ratio), on top of the 1–2 tick input latency. The
@@ -150,7 +157,10 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   rebuild the root files are the build output: all `?v=` hashes change, the `index.html` hooks
   come back via `engine/patch-index.py`, the previous build goes under `old/<id>/` so existing
   save states still open. **Save states are per build**: the Saves screen opens an older
-  save's build in `old/<id>/` (a new tab), so every archived page must carry the hook too, as
+  save's build in `old/<id>/` with `window.open(…, '_blank')`; the overlay patches `window.open`
+  to `location.assign` for those URLs (same tab; a home-screen app would otherwise land in
+  Safari) and in an archived build shows a yellow ⤒ pill back to the root (no browser chrome in
+  a home-screen app). Every archived page must carry the hook too, as
   `../../mobile/boot.js` (`patch-index.py old/<id>/index.html`, run by build.sh); `boot.js`
   resolves `mobile.css` / `mobile.js` / `autostart.js` from its own URL, so one `mobile/` at
   the root serves them all.
@@ -209,9 +219,18 @@ node scripts/headless.js                             # smoke: start, turn, walk,
 
 Playwright + Chromium are preinstalled; `--use-gl=swiftshader`; device iPhone 13, viewport
 844×390, touches via CDP `Input.dispatchTouchEvent`. The browser profile persists
-(`PROFILE_DIR`), so the installer is unpacked once. `INSTALLER_MIRROR=1` points archive.org at
-a local HTTPS stand-in (127.0.0.1:8443, a tiny Python server with a self-signed cert) for
-repeatable runs without the slow Internet Archive.
+(`PROFILE_DIR`, default `/tmp/gta2-mobile-profile`), so the installer is unpacked once.
+`INSTALLER_MIRROR=<url>` redirects the archive.org installer request (Playwright route → 302) to
+that URL: a plain-HTTP local server with CORS headers serving a `GTA2INSTALLER.exe` you already
+have (in this sandbox `python3 -I <scratchpad>/mirror/serve.py <exe>` on 127.0.0.1:8443, the
+exe under `<scratchpad>/gta2inst/`). **Always set it**: without it a fresh profile downloads
+from archive.org at ~1 MB/min. The game files are ~67 MB of IndexedDB once unpacked.
+
+**Probes pollute each other**: `autostart.js` presses Continue when an autosave exists, so the
+next probe resumes the previous one's world (cars left on the test road → failed spawns, the
+car entering a wrong one, rear-endings that look like braking). Delete the save database first:
+`indexedDB.deleteDatabase('gta2-port-states')` from a page of the origin, then `startGame`.
+The long road (`gta2_dev_find_road`) has traffic: a lane change at speed can hit a car.
 
 ## Gotchas met so far
 
