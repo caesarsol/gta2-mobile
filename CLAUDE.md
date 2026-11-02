@@ -95,6 +95,13 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   physical and get remapped. Known limit: taps on the shell's map screen (waypoints) are not
   remapped. Tune `rotate`: 1 notch-left (default), −1 notch-right, 0 off. Headless:
   `VIEWPORT=390x844`.
+- **Camera**: the engine raises the camera with speed (car height + raw speed; drawn height 1
+  on foot, ~4.7 at speed 0.22, up to 14) and the port's Modern camera only smooths it
+  (`port_modern_camera.cpp`). `gta2_port_set_camera(mode, bias)` adds `bias` (clamped −2…+4)
+  to the drawn height immediately; `map.last.camZ` is that drawn height. `camTick` holds it at
+  Tune `camFoot` (2) / `camCar` (4) with bias = target − (camZ − bias), eased between the two.
+  Beyond the clamp (fast cars) it drifts up a little. The toolbar's Camera / View distance
+  buttons are hidden on touch; `camLock = 0` restores the shell's stored camera.
 - The map screen (`gta2.map.open`) covers the game and pauses it; on touch only our map pill
   stays visible to close it (M). The shell's toolbar `#tools` is hidden on touch and toggled by
   the ⋯ pill (z-index above the overlay so its clicks land).
