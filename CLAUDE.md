@@ -165,8 +165,10 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   `|player − cam| < 0.3` (the camera pans across the map at a limited speed, up to ~30 s),
   spawn a fresh car on a fresh spot along the road, then record `(speed, (player − cam) ·
   heading)` per frame.
-- The map screen (`gta2.map.open`) covers the game and pauses it; on touch only our map pill
-  stays visible to close it (M). The shell's toolbar `#tools` is hidden on touch and toggled by
+- The map screen (`gta2.map.open`) covers the game and pauses it; on touch the overlay shows
+  only the **map bar**: close (M), zoom + / − (KeyE / KeyQ), You (Space, recentre), Reveal
+  (KeyF, all vs. only what you have seen; `map.reveal`), Clear (Delete, drops the waypoint;
+  dimmed when none). Drag pans, a tap sets the waypoint (also under the forced rotation). The shell's toolbar `#tools` is hidden on touch and toggled by
   the ⋯ pill (z-index above the overlay so its clicks land).
 - Front end: Bink movies are stubbed, so after `gta2_start` the game shows its title and
   menu; **Enter twice** (title, PLAY) starts area 1 — upstream's own `?autostart=1` does that
