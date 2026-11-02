@@ -143,8 +143,22 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   `/home/user/m1stermo/gta2-browser/research/` (work dir `/home/user/m1stermo`). After a
   rebuild the root files are the build output: all `?v=` hashes change, the `index.html` hooks
   come back via `engine/patch-index.py`, the previous build goes under `old/<id>/` so existing
-  save states still open. Measured: while driving the Modern camera leads 2.7 blocks ahead, the
-  Mobile one trails ~0.5 (its follow spring), none ahead.
+  save states still open.
+- **Mobile camera follow + look-ahead (patch 0028, `port/platform/mobile_camera_web.cpp`)**:
+  the camera follows its target with a spring (`SmoothApproach`, `Camera_0xBC::Update_435FF0`)
+  whose acceleration and top speed scale with the *simulated* height; mode 2 keeps that height
+  at 1 (no rise with speed), so a fast car outran the camera: measured lag ≈ 2.8 blocks per
+  block/tick of speed (1.1 blocks at 0.4; the view's half-height at camZ 4 is 4.2 blocks, so the
+  car reached the front edge). Fix: in mode 2 the spring's acceleration and top speed are
+  scaled ×4 (`gta2_port_set_camera_follow`), and a **bounded look-ahead along the velocity** is
+  added, lead = min(speed × k, 3 blocks) with k = 7 ticks (`gta2_port_set_camera_lead(k, max)`,
+  Tune `camLead`). Net effect measured on the long road (model 25): camera ahead of the car by
+  ~3.8 × speed blocks (0.7 at 0.2, 1.5 at 0.4), zero when stopped, smooth in speed (no swaying
+  with the velocity angle, unlike the original's 180/240 px offset). The Modern camera leads
+  2.7 blocks ahead at 0.2 and rises. Probe protocol: after `gta2_dev_teleport` wait until
+  `|player − cam| < 0.3` (the camera pans across the map at a limited speed, up to ~30 s),
+  spawn a fresh car on a fresh spot along the road, then record `(speed, (player − cam) ·
+  heading)` per frame.
 - The map screen (`gta2.map.open`) covers the game and pauses it; on touch only our map pill
   stays visible to close it (M). The shell's toolbar `#tools` is hidden on touch and toggled by
   the ⋯ pill (z-index above the overlay so its clicks land).
