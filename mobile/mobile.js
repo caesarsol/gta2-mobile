@@ -283,6 +283,8 @@
       help: 'Camera height on foot when the fixed camera is on. The game\'s own is 1.' },
     { k: 'camCar', label: 'Camera · in a car (blocks)', def: 4, step: 0.5, min: 1, max: 10,
       help: 'Camera height in a car: a bit higher = you see further. Above ~5 the game\'s camera cannot be held down at speed (its offset is limited to ±2…4 blocks).' },
+    { k: 'camLead', label: 'Camera · look-ahead (ticks)', def: 7, step: 1, min: 0, max: 20,
+      help: 'Cars (Mobile camera): the camera sits ahead of the car by speed × this many ticks, at most 3 blocks, so you see more road ahead; the follow spring alone trails a fast car by ~3 ticks. 0 = exactly on the car.' },
     { k: 'rotate', label: 'Portrait lock · rotate', def: 1, step: 1, min: -1, max: 1,
       help: 'Phone locked in portrait? The page is turned to landscape anyway: 1 = hold it with the notch on the left, −1 = notch on the right, 0 = off (follow the phone).' },
   ];
@@ -448,14 +450,17 @@
     stick.dataset.mode = reversing ? 'rev' : 'fwd';
   }
 
-  // Engine-side steering parameters (Tune): momentum look-ahead in ticks, dead band in degrees → Ang16 units.
+  // Engine-side parameters (Tune): steering momentum look-ahead (ticks) and dead band (degrees →
+  // Ang16 units); Mobile camera look-ahead (ticks, capped at 3 blocks in the engine).
   let steerParamsSent = '';
   function applySteerParams() {
     const g = G();
     if (!g || !g.Module) return;
-    const sig = `${T.steerKd}:${T.steerBand}`;
+    const sig = `${T.steerKd}:${T.steerBand}:${T.camLead}`;
     if (sig === steerParamsSent) return;
-    try { g.Module.ccall('gta2_port_set_steer_params', null, ['number', 'number'], [Math.round(T.steerKd), Math.round(T.steerBand * 4)]); steerParamsSent = sig; } catch { /* older engine */ }
+    try { g.Module.ccall('gta2_port_set_steer_params', null, ['number', 'number'], [Math.round(T.steerKd), Math.round(T.steerBand * 4)]); } catch { /* older engine */ }
+    try { g.Module.ccall('gta2_port_set_camera_lead', null, ['number', 'number'], [T.camLead, 3]); } catch { /* older engine */ }
+    steerParamsSent = sig;
   }
   // The engine-side steering target (Ang16 units, 4 per degree; -1 = off). Sent only on change.
   const TAU = Math.PI * 2;
