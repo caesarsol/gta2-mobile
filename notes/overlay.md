@@ -17,6 +17,10 @@ Design decisions and mechanics of `mobile.js` / `mobile.css` / `autostart.js` / 
   (`setSteerTarget`, soft zone `steerSoft` → `gta2_port_set_steer_ramp`, grip `steerGrip` →
   `gta2_port_set_steer_grip`), the overlay holds W or S. Pointing more than `revEnter` (130°) behind the
   car = reverse (exit below `revExit`, 100°), drawn as the red sector; A/D are flipped in reverse.
+  **Throttle**: the distance between the dead zone and `throttleFull` (110 px; 0 = off) caps the
+  engine's gas pedal in proportion (`setThrottle` → `gta2_port_set_throttle`, 0..256; 256 whenever
+  the stick is idle / released / on foot). The pedal is a 3:1 range of engine force, not of
+  speed (`notes/engine.md`, Cars).
 - Rejected / removed: a JS-side predictive release for cars (replaced by the engine override),
   damping code (the user asked to remove it).
 

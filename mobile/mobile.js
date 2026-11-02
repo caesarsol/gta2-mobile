@@ -312,6 +312,8 @@
       help: 'Cars: GTA2 itself steers at full lock only, which slides at speed. Within this angle of the stick direction the wheel angle is reduced (square root of the remaining error), full lock beyond it and at low speed. 0 = always full lock (jabs and slides).' },
     { k: 'steerGrip', label: 'Steer · grip (%)', def: 100, step: 10, min: 0, max: 100,
       help: 'Cars: every tick the car\'s velocity is turned onto its heading by this much. 100 = GTA1-style, the car never slides and goes exactly where it points, keeping its speed through turns. 0 = GTA2\'s own physics (skids at speed).' },
+    { k: 'throttleFull', label: 'Throttle · full at (px)', def: 110, step: 10, min: 0, max: 130,
+      help: 'Cars: the stick distance is the gas pedal. Between the dead zone and this radius the engine\'s pedal is capped in proportion (a little way out = gentle, this far = full). 0 = always full gas, as before.' },
     { k: 'revEnter', label: 'Reverse · enter (°)', def: 130, step: 5, min: 90, max: 180,
       help: 'Cars only. If the stick points more than this behind the car, you reverse toward it instead of U-turning. Drawn as the dashed red sector.' },
     { k: 'revExit', label: 'Reverse · exit (°)', def: 100, step: 5, min: 60, max: 180,
@@ -414,6 +416,7 @@
     if (stickDist < T.ringMove) {
       releaseHeld();
       setSteerTarget(-1);
+      setThrottle(256);
       reversing = false;
       walking = false;
       tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
@@ -437,6 +440,7 @@
 
     if (!s.inCar) {
       setSteerTarget(-1);
+      setThrottle(256);
       // On foot: hold-then-tap turning (see above). W is held throughout.
       const now = performance.now();
       const dir = delta > 0 ? 1 : -1;
@@ -493,6 +497,10 @@
     setHeld('KeyA', false);
     setHeld('KeyD', false);
     setSteerTarget(Math.round((((target % TAU) + TAU) % TAU) / TAU * 1440) % 1440);
+    // The stick distance is the gas pedal: the engine's analog pedal is capped in proportion
+    // between the dead zone and throttleFull (engine patch 0028); 0 = always full.
+    const span = T.throttleFull - T.ringMove;
+    setThrottle(span > 0 ? Math.round(256 * Math.min(1, Math.max(0, (stickDist - T.ringMove) / span))) : 256);
     setHeld('KeyW', !reversing);
     setHeld('KeyS', reversing);
     stick.dataset.mode = reversing ? 'rev' : 'fwd';
@@ -530,6 +538,14 @@
     if (!g || !g.Module) return;
     try { g.Module.ccall('gta2_port_set_steer_target', null, ['number'], [units]); steerSent = units; } catch { /* older engine */ }
   }
+  // The gas pedal cap (0..256 of the full pedal; 256 = no cap). Sent only on change.
+  let throttleSent = 256;
+  function setThrottle(t) {
+    if (t === throttleSent) return;
+    const g = G();
+    if (!g || !g.Module) return;
+    try { g.Module.ccall('gta2_port_set_throttle', null, ['number'], [t]); throttleSent = t; } catch { /* older engine */ }
+  }
 
   function updateStick(x, y) {
     let dx = x - cx;
@@ -561,6 +577,7 @@
     tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
     releaseHeld();
     setSteerTarget(-1);
+    setThrottle(256);
   }
 
   // Ring size and reverse sector follow the tunables
