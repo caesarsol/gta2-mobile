@@ -79,9 +79,10 @@ the midpoint pan are driven by us until all fingers lift.
 
 `camTick` (per frame) keeps the drawn height at `camFoot` / `camCar` through
 `gta2_port_set_camera(mode, bias)`, mode from `localStorage['gta2-port-camera']` ('mobile' = 2).
-`applySteerParams` sends `gta2_port_set_steer_params`, `gta2_port_set_camera_lead(camLead, 3)`
-and `gta2_port_set_hud_inset` (side padding → reference px) whenever a value changes. Details
-and measurements: `notes/engine.md`.
+`applySteerParams` sends `gta2_port_set_steer_params`, `_set_steer_ramp`,
+`gta2_port_set_camera_lead(camLead, 3)` (default 0: the car stays centred) and
+`gta2_port_set_hud_inset` (side padding → reference px) whenever a value changes. Details and
+measurements: `notes/engine.md`.
 
 ## Sound
 

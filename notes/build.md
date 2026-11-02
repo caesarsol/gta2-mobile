@@ -9,8 +9,8 @@ gta2-browser with our patches; M1sterMo's last build (`3213c238…`) is kept und
 
 1. clones `gta2-browser` at the pinned commit (66d3462) into `<work>`, applies
    `engine/port-web.patch` (our changes to `port/`, `web/`, `scripts/` there) and the gta2_re
-   patches `engine/00NN-*.patch` (0026 Mobile camera: mode 2, follow spring, look-ahead hook;
-   0027 steering: key override hook + wheel-angle scale hook) onto `research/port-work/core`
+   patches `engine/00NN-*.patch` (0026 Mobile camera: mode 2, pinned to its target, look-ahead
+   hook; 0027 steering: key override hook + wheel-angle scale hook) onto `research/port-work/core`
    (stale copies of our patches in `port/patches` are removed first);
 2. installs Emscripten 6.0.12 under `research/toolchains/emsdk` (first time only, ~300 MB; the
    download was once blocked by a classifier and then went through on retry) and the prebuilt
@@ -34,8 +34,8 @@ re-creates the core from the patches, so the core's history is ours to rewrite.
 - `port/platform/steer_web.cpp` — `gta2_port_set_steer_target`, `_set_steer_params`,
   `_set_steer_ramp` (soft zone), `_steer_debug`; `Gta2Port_SteerOverride` / `Gta2Port_SteerScale`
   called from patch 0027 (see `notes/engine.md`, Cars).
-- `port/platform/mobile_camera_web.cpp` — `gta2_port_set_camera_lead(k, max)`,
-  `gta2_port_set_camera_follow(scale)`.
+- `port/platform/mobile_camera_web.cpp` — `gta2_port_set_camera_lead(k, max)` (the camera
+  itself is pinned to its target in patch 0026).
 - `port/platform/dev_hooks.cpp` — `gta2_dev_*` (`find_open` is ours).
 - `port/platform/frame.cpp` — `gta2_port_set_hud_inset`.
 - `port/platform/vid_web.cpp` — `gta2_port_set_camera` modes 0/1/2.

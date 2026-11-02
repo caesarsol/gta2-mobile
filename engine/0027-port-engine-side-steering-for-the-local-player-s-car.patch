@@ -1,4 +1,4 @@
-From f4f20cc67d2110766b7b20e2756c440c306ef290 Mon Sep 17 00:00:00 2001
+From a1af43107395d8f29b5a52cd71dd9a6dc46e4214 Mon Sep 17 00:00:00 2001
 From: caesarsol <smilemachine@gmail.com>
 Date: Mon, 2 Nov 2026 01:04:52 +0000
 Subject: [PATCH 27/27] port: engine-side steering for the local player's car

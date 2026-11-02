@@ -1,19 +1,22 @@
-From a25e92dcea3038f5eb807ea5efe827172a33b066 Mon Sep 17 00:00:00 2001
+From e266a1f07b6c46b2f20644b505d498984b468c31 Mon Sep 17 00:00:00 2001
 From: caesarsol <smilemachine@gmail.com>
 Date: Mon, 2 Nov 2026 00:09:51 +0000
 Subject: [PATCH 26/27] port: Mobile camera (mode 2) for GTA2 Mobile: centred
- on the car, follow spring and bounded look-ahead
+ on the car, pinned to its target, look-ahead hook
 
 Mode 2 skips the velocity camera offset and the height from speed (the car stayed under
-the thumb), scales the follow spring so a fast car does not outrun the camera, and adds a
-bounded look-ahead along the velocity (Gta2Port_CameraLead, port/platform/mobile_camera_web.cpp).
+the thumb), pins the camera x / y to this tick's follow target instead of the follow spring
+(whose speed scales with the low simulated height: a fast car outran it), and calls a
+bounded look-ahead hook along the velocity (Gta2Port_MobileCameraLead,
+port/platform/mobile_camera_web.cpp; the port keeps it at 0 by default).
 ---
- Source/Camera.cpp | 28 ++++++++++++++++++++++++++--
- Source/Camera.hpp |  2 ++
- 2 files changed, 28 insertions(+), 2 deletions(-)
+ Source/Camera.cpp  | 92 +++++++++++++++++++++++++++++++++++++++++++++-
+ Source/Camera.hpp  |  2 +
+ Source/winmain.cpp |  2 +
+ 3 files changed, 95 insertions(+), 1 deletion(-)
 
 diff --git a/Source/Camera.cpp b/Source/Camera.cpp
-index 75de08d0..de912368 100644
+index 75de08d0..d11b4972 100644
 --- a/Source/Camera.cpp
 +++ b/Source/Camera.cpp
 @@ -295,6 +295,17 @@ MATCH_FUNC(0x436200)
@@ -34,54 +37,140 @@ index 75de08d0..de912368 100644
      Ang16 angle;
      Fix16_Point vel;
      Fix16_Point offset;
-@@ -529,6 +540,19 @@ void Camera_0xBC::Update_435FF0()
- {
-     Camera_0xBC::SavePrevCamPos_4357B0();
-     Fix16 v5 = field_98_cam_pos2.field_8_z * dword_676918;
-+#ifdef GTA2_PORT
-+    // Mobile camera (mode 2): the follow spring's acceleration and top speed scale with the
-+    // simulated height, which mode 2 keeps low (no rise with speed), so a fast car outran the
-+    // camera. Scale both so the camera keeps up (port/platform/mobile_camera_web.cpp).
-+    Fix16 xyAccel = dword_676740;
-+    if (gGta2PortCameraMode == 2 && gGta2PortCamFollowScale > 1)
-+    {
-+        xyAccel = Fix16(xyAccel.mValue * gGta2PortCamFollowScale, 0);
-+        v5 = Fix16(v5.mValue * gGta2PortCamFollowScale, 0);
-+    }
-+#else
-+    Fix16& xyAccel = dword_676740;
-+#endif
- 
+@@ -533,6 +544,36 @@ void Camera_0xBC::Update_435FF0()
      switch (field_3C_followed_ped_id)
      {
-@@ -536,12 +560,12 @@ void Camera_0xBC::Update_435FF0()
+         case 1:
++#ifdef GTA2_PORT
++            // Mobile camera (mode 2): the camera is pinned to its target in x / y instead of
++            // trailing it on the follow spring, whose acceleration and top speed scale with the
++            // simulated height that mode 2 keeps low: a fast car outran the spring by ~2.8 blocks
++            // per block/tick. Pinned, the player stays centred at any speed (the height still
++            // eases below). The port's own look-ahead goes into the target
++            // (ApplyCarVelocityCameraOffset_436200, port/platform/mobile_camera_web.cpp).
++            // field_10_cam_pos_tgt2 is this tick's target (UpdateFollowPedCamera_436540 runs
++            // just before); field_0_cam_pos_tgt1 is last tick's, one car length behind at speed.
++            if (gGta2PortCameraMode == 2)
++            {
++                field_98_cam_pos2.field_0_x = field_10_cam_pos_tgt2.field_0_x;
++                field_98_cam_pos2.field_4_y = field_10_cam_pos_tgt2.field_4_y;
++                field_AC_cam_velocity.field_0_x = kZero_676818;
++                field_AC_cam_velocity.field_4_y = kZero_676818;
++            }
++            else
++            {
++                SmoothApproach_4F7540(field_0_cam_pos_tgt1.field_0_x,
++                                      field_AC_cam_velocity.field_0_x,
++                                      field_98_cam_pos2.field_0_x,
++                                      dword_676740,
++                                      v5);
++                SmoothApproach_4F7540(field_0_cam_pos_tgt1.field_4_y,
++                                      field_AC_cam_velocity.field_4_y,
++                                      field_98_cam_pos2.field_4_y,
++                                      dword_676740,
++                                      v5);
++            }
++#else
              SmoothApproach_4F7540(field_0_cam_pos_tgt1.field_0_x,
                                    field_AC_cam_velocity.field_0_x,
                                    field_98_cam_pos2.field_0_x,
--                                  dword_676740,
-+                                  xyAccel,
-                                   v5);
-             SmoothApproach_4F7540(field_0_cam_pos_tgt1.field_4_y,
-                                   field_AC_cam_velocity.field_4_y,
+@@ -543,6 +584,7 @@ void Camera_0xBC::Update_435FF0()
                                    field_98_cam_pos2.field_4_y,
--                                  dword_676740,
-+                                  xyAccel,
+                                   dword_676740,
                                    v5);
++#endif
              SmoothApproachClamped_4F75D0(&field_0_cam_pos_tgt1.field_8_z,
                                           &field_AC_cam_velocity.field_8_z,
+                                          &field_98_cam_pos2.field_8_z,
+@@ -947,4 +989,52 @@ bool Camera_0xBC::IsPointInBoundaries_58CF10(Fix16 a2, Fix16 a3)
+ {
+     return a2 >= field_78_boundaries_non_neg.field_0_left && a2 <= field_78_boundaries_non_neg.field_4_right &&
+         a3 >= field_78_boundaries_non_neg.field_8_top && a3 <= field_78_boundaries_non_neg.field_C_bottom;
+-}
+\ No newline at end of file
++}
++#ifdef GTA2_PORT
++#include "Player.hpp"
++#include "char.hpp"
++
++// Mobile camera (mode 2), after the whole game update (winmain.cpp, before the interpolation
++// snapshot). The target Update_435FF0 pinned the camera to is the ped's position as the ped
++// service copied it from the car *last* tick, and the cars move after the players, so the
++// drawn camera trailed a fast car by two ticks (~0.75 blocks). Put the view camera (the one
++// that is drawn) on the followed sprite as the update left it, redo the look-ahead from there,
++// keep the shake the update added, and refresh the boundaries for the new position.
++void Gta2Port_MobileCameraPostTick()
++{
++    if (gGta2PortCameraMode != 2 || !gGame_0x40_67E008)
++    {
++        return;
++    }
++    Player* pPlayer = gGame_0x40_67E008->field_1C_view_player;
++    if (!pPlayer || pPlayer->field_6C_bIn_debug_cam_mode)
++    {
++        return;
++    }
++    Camera_0xBC& cam = pPlayer->field_14C_view_camera;
++    Ped* pPed = cam.field_34_ped;
++    if (cam.field_3C_followed_ped_id != 1 || !pPed || pPed != pPlayer->field_2C4_player_ped)
++    {
++        return;
++    }
++    Car_BC* pCar = pPed->get_car_416B60();
++    const Sprite* pSprite = pCar ? pCar->field_50_car_sprite
++                                 : (pPed->field_168_game_object ? pPed->field_168_game_object->get_sprite_ptr_4338D0() : NULL);
++    if (!pSprite)
++    {
++        return;
++    }
++    Fix16 x = pSprite->field_14_xy.x;
++    Fix16 y = pSprite->field_14_xy.y;
++    if (pCar)
++    {
++        Gta2Port_MobileCameraLead(pCar, &x, &y);
++    }
++    // after Update_435FF0, camera - target is the shake it applied (zero otherwise)
++    x += cam.field_98_cam_pos2.field_0_x - cam.field_0_cam_pos_tgt1.field_0_x;
++    y += cam.field_98_cam_pos2.field_4_y - cam.field_0_cam_pos_tgt1.field_4_y;
++    cam.field_98_cam_pos2.field_0_x = x;
++    cam.field_98_cam_pos2.field_4_y = y;
++    cam.RefreshBoundaries_436110();
++}
++#endif
 diff --git a/Source/Camera.hpp b/Source/Camera.hpp
-index 36e738d3..61980779 100644
+index 36e738d3..1a3cc150 100644
 --- a/Source/Camera.hpp
 +++ b/Source/Camera.hpp
-@@ -242,6 +242,8 @@ EXTERN_GLOBAL(Camera_0xBC*, gViewCamera_676978);
+@@ -242,7 +242,9 @@ EXTERN_GLOBAL(Camera_0xBC*, gViewCamera_676978);
  #ifdef GTA2_PORT
  // port_modern_camera.cpp (D17)
  extern "C" s32 gGta2PortCameraMode;
 +extern "C" void Gta2Port_MobileCameraLead(Car_BC* pCar, Fix16* pX, Fix16* pY); // mobile_camera_web.cpp
-+extern "C" s32 gGta2PortCamFollowScale; // mobile_camera_web.cpp
  void Gta2Port_ModernCameraTick(Camera_0xBC* cam);
++void Gta2Port_MobileCameraPostTick(); // Camera.cpp, mode 2 (GTA2 Mobile)
  Fix16 Gta2Port_PresentedCameraZ(const Camera_0xBC* cam);
  // port_interpolation.cpp (D04)
+ extern "C" s32 gGta2PortInterpolate;
+diff --git a/Source/winmain.cpp b/Source/winmain.cpp
+index e1e82223..46cc83e8 100644
+--- a/Source/winmain.cpp
++++ b/Source/winmain.cpp
+@@ -1735,6 +1735,7 @@ EXPORT u8 RunGameFrame_4DA850()
+             bContinue = ExecuteGame_4DA780();
+             Gta2Port_CoopTick();
+             Gta2Port_CoopSnapshot();
++            Gta2Port_MobileCameraPostTick();
+             Gta2Port_InterpTick();
+             Gta2Port_SyncRecord();
+             // The next tick is due one frame after this one was due, not after it ran: a browser only
+@@ -1806,6 +1807,7 @@ EXPORT u8 RunGameFrame_4DA850()
+             }
+             bContinue = ExecuteGame_4DA780();
+ #ifdef GTA2_PORT
++            Gta2Port_MobileCameraPostTick();
+             Gta2Port_InterpTick();
+ #endif
+             s32 v2 = gGame_0x40_67E008->GetFrameDurationMs_4B8BB0();
 -- 
 2.43.0
 

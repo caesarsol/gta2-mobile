@@ -320,8 +320,8 @@
       help: 'Camera height on foot when the fixed camera is on. The game\'s own is 1.' },
     { k: 'camCar', label: 'Camera · in a car (blocks)', def: 4, step: 0.5, min: 1, max: 5,
       help: 'Camera height in a car: a bit higher = you see further (and past the map edge, which is black). 5 is the most the game allows: the port can only add 4 blocks to the game\'s own height.' },
-    { k: 'camLead', label: 'Camera · look-ahead (ticks)', def: 7, step: 1, min: 0, max: 20,
-      help: 'Cars (Mobile camera): the camera sits ahead of the car by speed × this many ticks, at most 3 blocks, so you see more road ahead; the follow spring alone trails a fast car by ~3 ticks. 0 = exactly on the car.' },
+    { k: 'camLead', label: 'Camera · look-ahead (ticks)', def: 0, step: 1, min: 0, max: 20,
+      help: 'Cars (Mobile camera): 0 = the car stays exactly centred at any speed. Above 0 the camera sits ahead of the car by speed × this many ticks (at most 3 blocks) to show more road ahead.' },
     { k: 'rotate', label: 'Portrait lock · rotate', def: 1, step: 1, min: -1, max: 1,
       help: 'Phone locked in portrait? The page is turned to landscape anyway: 1 = hold it with the notch on the left, −1 = notch on the right, 0 = off (follow the phone).' },
   ];

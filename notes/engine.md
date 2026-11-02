@@ -112,21 +112,37 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   at Tune `camFoot` (2) / `camCar` (4) with bias = target − (camZ − bias), eased. Beyond the
   clamp (fast cars) it drifts up a little; **5 is the ceiling** (own height ~1 + bias 4), so the
   steppers stop there. `camLock = 0` restores the shell's stored camera. At 5 the view reaches
-  past the map edge near it (black, no bug).
+  past the map edge near it (black). The user saw black on the left *while driving west* at 5:
+  not reproduced headless (the drawn tiles, `MapRenderer::Draw_4F6A20`, are centred on the
+  camera, which includes the look-ahead, with the wide-screen extra, so nothing is missing on
+  the leading side); the look-ahead (up to 3 blocks west of the car) plus the 10-block
+  half-width at 5 reach the edge sooner — the pinned camera without look-ahead is the answer
+  tried first.
 - **Mobile camera (patch 0026, mode 2)**: the real phone problem was the *lead*
   (`ApplyCarVelocityCameraOffset_436200` puts the camera up to ~4 blocks ahead of a moving car
   and raises it): the car ends up under the thumb. Mode 2 skips that offset (centred, like on
   foot); `gta2_port_set_camera` accepts 0/1/2; the shell's Camera button cycles Modern → Mobile
   → Classic (also a landing option); touch defaults to `mobile`.
-- **Follow + look-ahead (same patch 0026, `port/platform/mobile_camera_web.cpp`)**: the camera
-  follows its target with a spring (`SmoothApproach`, `Camera_0xBC::Update_435FF0`) whose
-  acceleration and top speed scale with the *simulated* height; mode 2 keeps it at 1, so a fast
-  car outran the camera (lag ≈ 2.8 blocks per block/tick; 1.1 blocks at 0.4 = the front edge
-  at camZ 4). Fix: in mode 2 the spring is scaled ×4 (`gta2_port_set_camera_follow`) and a
-  bounded look-ahead along the velocity is added, lead = min(speed × k, 3 blocks), k = 7 ticks
-  (`gta2_port_set_camera_lead(k, max)`, Tune `camLead`). Measured on the long road (model 25):
-  camera ahead by ~3.8 × speed blocks (0.7 at 0.2, 1.5 at 0.4), zero when stopped, smooth. The
-  Modern camera leads 2.7 blocks at 0.2 and rises.
+- **Pinned camera (same patch 0026)**: the original camera follows its target with a spring
+  (`SmoothApproach`, `Camera_0xBC::Update_435FF0`) whose acceleration and top speed scale with
+  the *simulated* height; mode 2 keeps it at 1, so a fast car outran the camera (lag ≈ 2.8
+  blocks per block/tick; 1.1 blocks at 0.4 = the front edge at camZ 4). First fix: spring ×4
+  plus a look-ahead of min(speed × 7 ticks, 3 blocks) — the user asked instead for the car
+  **centred at any speed**, so in mode 2 the camera's x / y are set to the target every tick
+  (no spring; the height still eases) and the look-ahead is off by default
+  (`gta2_port_set_camera_lead(k, max)`, Tune `camLead` 0; above 0 it moves the target ahead,
+  speed × k blocks at most max). The spring scale export (`gta2_port_set_camera_follow`) is
+  gone. The interpolation (`port_interpolation.cpp`) lerps the camera between ticks as before.
+  **Tick order matters**: `Player::Service_5687F0` (camera target + `Update_435FF0`) runs
+  before `PedsService` (copies the car sprite position into the ped's `field_1AC_cam`) and
+  `CarsService` (moves the car), and the target `Update` reads (`field_0_cam_pos_tgt1`) is the
+  previous tick's `field_10_cam_pos_tgt2`, so the pinned camera still trailed the car by
+  0.87 blocks at 0.38 blocks/tick (measured, `map.last` camera − car). Pinning to
+  `field_10_cam_pos_tgt2` took one tick off (0.6 blocks); the rest is the ped-copy + car-move
+  order. Fix: `Gta2Port_MobileCameraPostTick()` (Camera.cpp, called from `winmain.cpp` after
+  the whole update, before `Gta2Port_InterpTick`) puts the view camera on the followed
+  sprite's position (+ look-ahead, + the shake the update applied) and refreshes the
+  boundaries. Measured: camera − car 0.00 blocks at any speed.
 - **HUD inset** (`gta2_port_set_hud_inset(refPx)`, port `frame.cpp`): the port anchors HUD parts
   to the screen edges by ±(width − 640)/2 reference px (side 0 left, 1 centre, 2 right); the
   inset pulls the anchored parts back in. The overlay sends its side padding (safe area / notch,
