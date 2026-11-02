@@ -683,6 +683,32 @@
   }
   window.gtaRotation = () => rotation;
 
+  // The shell's map screen reads e.clientX/Y against its (layout-sized) rect: under the forced
+  // rotation those are screen coordinates, so taps, drags and the waypoint would land wrong.
+  // Re-dispatch pointer events aimed at the map canvas with coordinates mapped into the page
+  // frame (the inverse of the body transform), once (marked), before the map's own listeners.
+  const screenToPage = (sx, sy) => {
+    const W = document.body.clientWidth, H = document.body.clientHeight; // page frame (sides swapped)
+    if (rotation === 1) return [sy, H - sx];
+    if (rotation === -1) return [W - sy, sx];
+    return [sx, sy];
+  };
+  for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+    window.addEventListener(type, (e) => {
+      if (!rotation || e.__gtaRotated || !e.target || e.target.id !== 'map-screen') return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      const [px, py] = screenToPage(e.clientX, e.clientY);
+      const ev = new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerId: e.pointerId, pointerType: e.pointerType,
+        isPrimary: e.isPrimary, button: e.button, buttons: e.buttons, clientX: px, clientY: py,
+        screenX: e.screenX, screenY: e.screenY, pressure: e.pressure, width: e.width, height: e.height,
+      });
+      ev.__gtaRotated = true;
+      e.target.dispatchEvent(ev);
+    }, true);
+  }
+
   // ---------- Sound pill (default off) ----------
   // Browsers only start audio inside a user gesture, and autostart.js presses
   // Play programmatically. The shell resumes its AudioContext on keydown /
