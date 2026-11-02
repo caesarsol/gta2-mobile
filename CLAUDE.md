@@ -82,8 +82,8 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   late, so a hold-until-aligned controller oscillates ±20° forever, whatever the threshold
   (measured 1.20 ↔ 1.89 rad around 1.57). The overlay **holds** the key while far, releases it
   `stopAhead` (~0.3 rad, measured) early, then **taps** one tick at a time (~0.09 rad each,
-  measured) with ~110 ms to settle. Converges in ~0.5 s with no overshoot. Cars yaw slowly
-  (∝ speed) and keep the plain hold + hysteresis controller.
+  measured) with ~110 ms to settle. Converges in ~0.5 s with no overshoot. **Cars are steered
+  by the engine** (next points): the overlay only sends the target heading and holds W / S.
 - **Car steering jitter: root cause (verified in open ground).** Cars have **yaw momentum**:
   after the steering key is released the heading keeps turning ~10° at low speed (more at
   speed, more for small cars with a high turn ratio), on top of the 1–2 tick input latency. The
@@ -101,7 +101,19 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   `map.last.heading`, the held keys and `gta2_dev_state` speed every animation frame, first
   with the engine alone (W, a 150 ms A tap, W: the new heading holds), then with the stick at
   several offsets. The overlay shows `Car <model>` under the weapon pills while driving.
-- `dinput_web.cpp` keeps "pressed since the last read": a key down+up inside one tick still
+- **Engine-side car steering (patch 0027 + `port/platform/steer_web.cpp`)**: the fix for the
+  above. `gta2_port_set_steer_target(units)` (Ang16, 4 per degree, −1 = off) sets a target
+  heading; `Car_BC::HandleUserInput_4418D0` of the *local* player's car then gets its left /
+  right keys decided once per tick with the exact heading and angular velocity:
+  `predicted = error − ω·kd` (kd ticks of momentum, default 2), steer while |predicted| > band
+  (default 6 units = 1.5°), restart only beyond 2× the band (hysteresis), keys inverted while
+  the car backs up (velocity against heading). `gta2_port_set_steer_params(kd, band)`;
+  `gta2_port_steer_debug()` → [active, error, ω, decision] for probes. Measured in the park
+  with the real joystick: 30° → −0.5°, 90° → +1.3°, −45° → +1°, settles in ~1.5–2 s, no
+  hunting; reverse backs up straight. Tune: `steerKd`, `steerBand`. Co-op: the override only
+  touches the local player's car, but it changes that car's inputs, so peers must run the same
+  build (accepted). `mobile.js` clears the target (−1) whenever the stick is idle, released,
+  on foot or hidden. a key down+up inside one tick still
   counts as held for that tick, so one-frame taps are reliable.
 - **Forced landscape** (`syncRotation`): iOS has no `screen.orientation.lock` and ignores the
   manifest orientation, so under a portrait lock the `body` is rotated 90° with CSS (sides
@@ -119,7 +131,7 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   Tune `camFoot` (2) / `camCar` (4) with bias = target − (camZ − bias), eased between the two.
   Beyond the clamp (fast cars) it drifts up a little. The toolbar's View distance button is
   hidden on touch; `camLock = 0` restores the shell's stored camera.
-- **Mobile camera = engine patch** (`engine/0026-*.patch`, `engine/port-web.patch`): the real
+- **Mobile camera = engine patch** (`engine/0026-*.patch`; `engine/0027-*.patch` is the steering; `engine/port-web.patch` carries the port/web/scripts changes): the real
   problem on a phone is the camera *lead* (`ApplyCarVelocityCameraOffset_436200` moves the
   camera up to ~4 blocks ahead of a moving car and raises it with speed): the car ends up under
   the thumb. Mode 2 skips that offset entirely (centred like on foot); `gta2_port_set_camera`
