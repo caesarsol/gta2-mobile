@@ -63,8 +63,11 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
 - Live state: `gta2.map.last` every frame (`map.js state()`): `hasPlayer`, `inCar`, `x`, `y`,
   `heading` (radians, engine units /1440), camera. `null` outside gameplay.
 - `Module.ccall('gta2_dev_state')` → 10 ints: player, inCar, x, y, z, speed (fixed /16384,
-  a **magnitude**, no sign), carModel, rot, weapon idx (−1 fists, 1 pistol, 2 MG, … pickup
-  order of map.js `WEAPONS`), ammo (**10× the HUD count**). Dev hooks are in the release wasm:
+  a **magnitude**, no sign), carModel, rot, weapon idx (the engine's `weapon_type` enum,
+  gta2_re `enums.hpp`: 0 pistol, 1 smg, 2 rocket, 3 shocker, 4 molotov, 5 grenade, 6 shotgun,
+  7 electro baton, 8 flamethrower, 9 silenced smg, 10 dual pistol, 15… vehicle weapons; −1 =
+  fists — **not** the pickup order of map.js `WEAPONS`), ammo (**10× the HUD count**;
+  `max_ammo_capacity` 99 → 990). Dev hooks are in the release wasm:
   `gta2_dev_spawn_car(model,dx,dy,rot)` (model 10 is a plain enterable car, **20 cannot be
   entered**), `gta2_dev_teleport(x,y)`, `gta2_dev_find_road()`, `gta2_dev_give_weapon(kind,ammo)`
   (kind = weapon idx; it does not select it), `gta2_dev_add_cash(n)`.
