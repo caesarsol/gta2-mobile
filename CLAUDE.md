@@ -24,22 +24,34 @@ Live at https://caesarsol.github.io/gta2-mobile/ (GitHub Pages from `main`, root
 - Chat in Italian; code, comments, commit messages and docs in English.
 - The branch is `main`. Do not create `claude/*` branches.
 
+## Notes: progressive disclosure (read before, write after)
+
+This file stays short. The details live in `notes/`, one file per area; **read the relevant
+note before touching that area**, and **write back what you learn before moving on**: anything
+that took more than one attempt, a wrong assumption, a measurement, a command that failed and
+the one that worked. Each note ends with a "Lessons" section for that; keep entries dated and
+terse. Update a note in the same commit as the change it documents (or its own `notes:` commit).
+
+| Note | Read it when… |
+|------|---------------|
+| `notes/testing.md` | running anything headless: servers, installer mirror, probe hygiene, helpers, where files are in this sandbox |
+| `notes/engine.md` | touching input, state, cars/steering, camera, HUD, shell screens, weapons; engine facts and measurements |
+| `notes/overlay.md` | changing `mobile/`: joystick rings, buttons, rotation, map screen, sound, loader, autostart |
+| `notes/build.md` | rebuilding the engine, patches, archived builds (`old/`) and per-build saves |
+
 ## Architecture (do not break)
 
-- Everything at the root except `mobile/`, `scripts/`, `CLAUDE.md` and the README note is the
-  **upstream build** (`gta2.wasm`, `gta2.js`, `shell.js`, `map.js`, …, `old/` = previous
-  builds for old saves). Never edit it: `git merge` of upstream must stay trivial. The one
+- Everything at the root except `mobile/`, `scripts/`, `notes/`, `engine/`, `CLAUDE.md` and
+  the README note is the **upstream build** (`gta2.wasm`, `gta2.js`, `shell.js`, `map.js`, …,
+  `old/` = previous builds for old saves) — since the Mobile camera it is *our rebuild* of
+  upstream with the patches in `engine/` (see `notes/build.md`). Never hand-edit it. The one
   hook is the `index.html` head (viewport, Apple metas, manifest, `<script src="mobile/boot.js?v=N">`).
-  Upstream source and docs: the `gta2-browser` repo (`web/` there = these files minus `?v=` hashes).
-- `mobile/boot.js`: cache-busting loader (`?v=<timestamp>` for our files), version label,
-  reload pill. Changing it costs up to 10 min of Pages CDN cache → avoid; add logic to the
-  other files instead. If you must, bump `?v=N` in `index.html`.
-- `mobile/mobile.js` + `mobile.css`: the overlay (joystick, buttons, top-bar pills, weapon
-  pill, Tune panel, sound pill, menu mode). Icons are inline SVG in `ICONS` (`window.gtaIcons`).
-- `mobile/autostart.js`: landing page → Continue / Play → front end → gameplay.
-- `mobile/manifest.webmanifest` + `icon-*.png`: home-screen web app.
+- `mobile/boot.js`: cache-busting loader; changing it or `index.html` costs up to 10 min of
+  Pages CDN cache → put logic in the other files. `mobile/mobile.js` + `mobile.css`: the
+  overlay. `mobile/autostart.js`: landing → gameplay. `manifest.webmanifest` + icons: web app.
 - Everything we do goes through `window.gta2` (`Module`, `map`, `audio`, `states`, `storage`,
-  `renderer`; set by `shell.js start()`) and synthetic `KeyboardEvent`s on `window`.
+  `renderer`; set by `shell.js start()`), synthetic `KeyboardEvent`s on `window`, and the
+  `gta2_port_*` / `gta2_dev_*` exports of our engine build.
 - No save code of our own: the port has save states (Saves screen, autosave, Continue).
 
 ## UI component rule
@@ -54,187 +66,12 @@ Positioning by id only. Round action buttons are `.gta-btn` with the same tokens
 padding, never fixed width/height. Keep the reset on the component classes, not on
 `#gtaMobile button` (boot.js mounts the reload pill outside `#gtaMobile`).
 
-## Engine / shell facts
-
-- Input: `keydown`/`keyup` on **`window`**, by `e.code`, with `e.key` used for typing in the
-  game's menus (`shell.js wireInput`). Defaults (`PORT_CONTROLS`): W/S move, A/D turn, L fire,
-  Enter in/out of cars, Space jump/handbrake, J/K weapons, M map, Esc menu, Tab scoreboard,
-  −/= view distance. Players can rebind them in the game's Options → we assume defaults.
-- Live state: `gta2.map.last` every frame (`map.js state()`): `hasPlayer`, `inCar`, `x`, `y`,
-  `heading` (radians, engine units /1440), camera. `null` outside gameplay.
-- `Module.ccall('gta2_dev_state')` → 10 ints: player, inCar, x, y, z, speed (fixed /16384,
-  a **magnitude**, no sign), carModel, rot, weapon idx (the engine's `weapon_type` enum,
-  gta2_re `enums.hpp`: 0 pistol, 1 smg, 2 rocket, 3 shocker, 4 molotov, 5 grenade, 6 shotgun,
-  7 electro baton, 8 flamethrower, 9 silenced smg, 10 dual pistol, 15… vehicle weapons; −1 =
-  fists — **not** the pickup order of map.js `WEAPONS`), ammo (**10× the HUD count**;
-  `max_ammo_capacity` 99 → 990). Dev hooks are in the release wasm:
-  `gta2_dev_spawn_car(model,dx,dy,rot)` (model 10 is a plain enterable car, **20 cannot be
-  entered**), `gta2_dev_teleport(x,y)`, `gta2_dev_find_road()`, `gta2_dev_give_weapon(kind,ammo)`
-  (kind = weapon idx; it does not select it), `gta2_dev_add_cash(n)`.
-- Entering a car takes about **4.5 s** (walk to the door + animation): wait that long in probes.
-  Getting out is immediate. While the ped walks to the door `map.last.inCar` is already true
-  but `gta2_dev_state` still says no car: probes must wait for the dev state too.
-- **In a car only a car weapon fires** (weapon idx ≥ 15: car MG, oil, mines, bombs, tank gun…;
-  `Ped::GetWeaponFromPed_46F110`); the ped's own weapon is just carried along. The overlay hides
-  Fire and the ◀ weapon ▶ pills in an unarmed car (`canFire`).
-- Heading `a`: forward on screen = `(sin a, −cos a)`; `a = π` faces screen-up; +x is
-  screen-right, +y screen-down; the camera is top-down and axis-aligned (verified visually).
-  Stick math is identical to gta-js-mobile. **Verified:** `A` increases `a` (turn left), on foot
-  and in a moving car; while a car **backs up the steering is inverted** (as in a real car), so
-  the controller flips A/D in reverse mode (`STEER_INVERTED_WHEN_REVERSING`). Cars do not yaw at
-  standstill.
-- GTA2 has **no run key** and **no direct weapon selection** (J/K cycle): one move ring, and a
-  weapon pill with ◀ ▶.
-- **On-foot turning is fast and quantised**: ~12° per 30 Hz tick once turning, seen a tick
-  late, so a hold-until-aligned controller oscillates ±20° forever, whatever the threshold
-  (measured 1.20 ↔ 1.89 rad around 1.57). The overlay **holds** the key while far, releases it
-  `stopAhead` (~0.3 rad, measured) early, then **taps** one tick at a time (~0.09 rad each,
-  measured) with ~110 ms to settle. Converges in ~0.5 s with no overshoot. On foot the stick has
-  two rings: inside `ringAim` (60 px) the ped only turns (aim and shoot); beyond it the ped turns
-  on the spot first and walks once within `walkStart` (20°) of the direction (stops again beyond
-  2×). Turning in place at 90° takes ~1 s, no displacement. **Cars are steered by the engine**
-  (next points): the overlay only sends the target heading and holds W / S, at any distance.
-- **Car steering jitter: root cause (verified in open ground).** Cars have **yaw momentum**:
-  after the steering key is released the heading keeps turning ~10° at low speed (more at
-  speed, more for small cars with a high turn ratio), on top of the 1–2 tick input latency. The
-  plain hold + hysteresis controller (dead band 5°) therefore overshoots and hunts around any
-  target with a ±10° limit cycle, period ~1 s — measured in the largest open square of the map
-  (`gta2_dev_find_open`, a park) for targets of 10°, 30°, 45° **and 90°** alike. Why it looks
-  direction-dependent on the phone: going straight along a street nothing is corrected, and
-  at the cardinal directions the kerbs/buildings realign a scraping car (the map-edge collision
-  response, `CarPhysics_B0::ApplyForward/ReverseEngineForce` → an angular impulse of 1°/tick
-  toward the wall's axis) which damps the hunt; at a diagonal nothing masks it and the walls
-  add their own torque. There is **no** free-space auto-straightening (an earlier reading of
-  the probe data, taken on a one-block-wide road, was wrong: the car was scraping the kerb).
-  **Method**: `scripts/headless.js` + a scratchpad probe that teleports to the open square,
-  spawns a car (`gta2_dev_spawn_car(10, 0, 2, 0)` then Enter; ~4.5 s), and records
-  `map.last.heading`, the held keys and `gta2_dev_state` speed every animation frame, first
-  with the engine alone (W, a 150 ms A tap, W: the new heading holds), then with the stick at
-  several offsets. The overlay shows `Car <model>` under the weapon pills while driving.
-- **Engine-side car steering (patch 0027 + `port/platform/steer_web.cpp`)**: the fix for the
-  above. `gta2_port_set_steer_target(units)` (Ang16, 4 per degree, −1 = off) sets a target
-  heading; `Car_BC::HandleUserInput_4418D0` of the *local* player's car then gets its left /
-  right keys decided once per tick with the exact heading and angular velocity:
-  `predicted = error − ω·kd` (kd ticks of momentum, default 2), steer while |predicted| > band
-  (default 6 units = 1.5°), restart only beyond 2× the band (hysteresis), keys inverted while
-  the car backs up (velocity against heading). `gta2_port_set_steer_params(kd, band)`;
-  `gta2_port_steer_debug()` → [active, error, ω, decision] for probes. Measured in the park
-  with the real joystick: 30° → −0.5°, 90° → +1.3°, −45° → +1°, settles in ~1.5–2 s, no
-  hunting; reverse backs up straight. Tune: `steerKd`, `steerBand`. Co-op: the override only
-  touches the local player's car, but it changes that car's inputs, so peers must run the same
-  build (accepted). `mobile.js` clears the target (−1) whenever the stick is idle, released,
-  on foot or hidden. a key down+up inside one tick still
-  counts as held for that tick, so one-frame taps are reliable.
-- **Forced landscape** (`syncRotation`): iOS has no `screen.orientation.lock` and ignores the
-  manifest orientation, so under a portrait lock the `body` is rotated 90° with CSS (sides
-  swapped, `position: fixed`; fixed descendants rotate with it). The renderer, `chooseViewWidth`
-  and the map measure canvases with `getBoundingClientRect()` **every frame**: on a rotated
-  element that box has its sides swapped, so the game canvases get an instance override that
-  returns the layout size. Stick deltas are rotated into the page frame; safe-area insets are
-  physical and get remapped. Pointer events aimed at the shell's map canvas (`#map-screen`)
-  are intercepted on `window` in the capture phase and re-dispatched with page-frame
-  coordinates (inverse of the body transform), so waypoints and drags land right (verified:
-  tap at page centre + 150 px → waypoint exactly 150 / scale blocks east). Our panels size in
-  `%` of `#gtaMobile`, never `vw`/`vh` (those are screen axes). Tune `rotate`: 1 notch-left
-  (default), −1 notch-right, 0 off. Headless: `VIEWPORT=390x844`.
-- **Camera**: the engine raises the camera with speed (car height + raw speed; drawn height 1
-  on foot, ~4.7 at speed 0.22, up to 14) and the port's Modern camera only smooths it
-  (`port_modern_camera.cpp`). `gta2_port_set_camera(mode, bias)` adds `bias` (clamped −2…+4)
-  to the drawn height immediately; `map.last.camZ` is that drawn height. `camTick` holds it at
-  Tune `camFoot` (2) / `camCar` (4) with bias = target − (camZ − bias), eased between the two.
-  Beyond the clamp (fast cars) it drifts up a little. The toolbar's View distance button is
-  hidden on touch; `camLock = 0` restores the shell's stored camera.
-- **Mobile camera = engine patch** (`engine/0026-*.patch`; `engine/0027-*.patch` is the steering; `engine/port-web.patch` carries the port/web/scripts changes): the real
-  problem on a phone is the camera *lead* (`ApplyCarVelocityCameraOffset_436200` moves the
-  camera up to ~4 blocks ahead of a moving car and raises it with speed): the car ends up under
-  the thumb. Mode 2 skips that offset entirely (centred like on foot); `gta2_port_set_camera`
-  accepts 0/1/2, the shell's Camera button cycles Modern → Mobile → Classic (also a landing
-  option), touch defaults to `mobile`. The engine in this repo **is our rebuild** (build id =
-  first 24 hex of sha256(gta2.wasm); M1sterMo's last build 3213c238… is kept under `old/`).
-  `engine/build.sh <work>` does everything (Emscripten 6.0.12 + gta2_re + prebuilt unshield;
-  the compile itself takes ~30 s on 4 cores). In this sandbox the toolchain and sources live in
-  `/home/user/m1stermo/gta2-browser/research/` (work dir `/home/user/m1stermo`). After a
-  rebuild the root files are the build output: all `?v=` hashes change, the `index.html` hooks
-  come back via `engine/patch-index.py`, the previous build goes under `old/<id>/` so existing
-  save states still open. **Save states are per build**: the Saves screen opens an older
-  save's build in `old/<id>/` with `window.open(…, '_blank')`; the overlay patches `window.open`
-  to `location.assign` for those URLs (same tab; a home-screen app would otherwise land in
-  Safari) and in an archived build shows a yellow ⤒ pill back to the root (no browser chrome in
-  a home-screen app). Every archived page must carry the hook too, as
-  `../../mobile/boot.js` (`patch-index.py old/<id>/index.html`, run by build.sh); `boot.js`
-  resolves `mobile.css` / `mobile.js` / `autostart.js` from its own URL, so one `mobile/` at
-  the root serves them all.
-- **Mobile camera follow + look-ahead (patch 0028, `port/platform/mobile_camera_web.cpp`)**:
-  the camera follows its target with a spring (`SmoothApproach`, `Camera_0xBC::Update_435FF0`)
-  whose acceleration and top speed scale with the *simulated* height; mode 2 keeps that height
-  at 1 (no rise with speed), so a fast car outran the camera: measured lag ≈ 2.8 blocks per
-  block/tick of speed (1.1 blocks at 0.4; the view's half-height at camZ 4 is 4.2 blocks, so the
-  car reached the front edge). Fix: in mode 2 the spring's acceleration and top speed are
-  scaled ×4 (`gta2_port_set_camera_follow`), and a **bounded look-ahead along the velocity** is
-  added, lead = min(speed × k, 3 blocks) with k = 7 ticks (`gta2_port_set_camera_lead(k, max)`,
-  Tune `camLead`). Net effect measured on the long road (model 25): camera ahead of the car by
-  ~3.8 × speed blocks (0.7 at 0.2, 1.5 at 0.4), zero when stopped, smooth in speed (no swaying
-  with the velocity angle, unlike the original's 180/240 px offset). The Modern camera leads
-  2.7 blocks ahead at 0.2 and rises. Probe protocol: after `gta2_dev_teleport` wait until
-  `|player − cam| < 0.3` (the camera pans across the map at a limited speed, up to ~30 s),
-  spawn a fresh car on a fresh spot along the road, then record `(speed, (player − cam) ·
-  heading)` per frame.
-- The map screen (`gta2.map.open`) covers the game and pauses it; on touch the overlay shows
-  only the **map bar**: close (M), zoom + / − (KeyE / KeyQ), You (Space, recentre), Reveal
-  (KeyF, all vs. only what you have seen; `map.reveal`), Clear (Delete, drops the waypoint;
-  dimmed when none), as a right-aligned column (✕ on top, a pill-high gap, then the actions)
-  so it never covers the legend at the left. Drag pans, a tap sets the waypoint (also under
-  the forced rotation), **two fingers pinch-zoom**: the overlay's window-capture interceptor
-  owns every pointer event on `#map-screen`, forwards single-finger ones (page coordinates),
-  and on a second finger ends the map's own drag with a synthetic moved+up (no waypoint),
-  then drives `map.zoomBy(f, midX, midY)` plus the midpoint pan itself until all fingers lift.
-  The map canvas is inset 20 px (or the safe area) from the notch side.
-- **HUD inset** (`gta2_port_set_hud_inset(refPx)`, port `frame.cpp`): the port anchors HUD
-  parts to the screen edges by ±(width − 640)/2 reference px; the inset pulls the anchored
-  parts back in. The overlay sends its side padding (safe area / notch, ≥ 20 px) converted to
-  reference px (480 per canvas height), so the health bars and the weapon icon clear the notch
-  while the game view stays put. The shell's toolbar `#tools` is hidden on touch and toggled by
-  the ⋯ pill (z-index above the overlay so its clicks land).
-- Front end: Bink movies are stubbed, so after `gta2_start` the game shows its title and
-  menu; **Enter twice** (title, PLAY) starts area 1 — upstream's own `?autostart=1` does that
-  at 1.5 s and 3.5 s. `autostart.js` sends Enter until `hasPlayer`. "Continue" on the landing
-  page loads the newest save state right after start.
-- Game files: the 346 MB freeware installer from archive.org is unpacked in a worker and kept
-  in IndexedDB (`gta2-port-gamefiles`, `navigator.storage.persist()`), so later visits do not
-  download. iOS: a home-screen web app has its **own** storage, separate from Safari → the
-  first download must happen inside the installed app.
-- Audio: `gta2.audio` (`audio.js`): `resume()`, `setMuted(bool)`, `ctx`. The shell resumes on
-  `keydown`/`pointerdown`; iOS needs a real gesture → the Sound pill (default off) unlocks on
-  its `pointerup`, with a silent inline `<audio>` loop (data URI) to survive the ringer switch.
-- The shell's screens we must not cover or break: `#landing` (scrolls), `#saves-screen`,
-  `#controls-screen`, the map (`gta2.map.open`), `#coop`. The overlay hides itself behind
-  them and never cancels their touches.
-
-## Testing (headless)
+## Testing in one breath
 
 ```bash
-python3 -m http.server 8124 --bind 127.0.0.1 &      # from the repo root
-node scripts/headless.js                             # smoke: start, turn, walk, spawn a car, drive
+source <(scripts/dev-servers.sh /path/to/GTA2INSTALLER.exe)   # site :8124, installer mirror :8443, INSTALLER_MIRROR
+node scripts/headless.js                                        # smoke: clean start, turn, walk, car
 ```
 
-Playwright + Chromium are preinstalled; `--use-gl=swiftshader`; device iPhone 13, viewport
-844×390, touches via CDP `Input.dispatchTouchEvent`. The browser profile persists
-(`PROFILE_DIR`, default `/tmp/gta2-mobile-profile`), so the installer is unpacked once.
-`INSTALLER_MIRROR=<url>` redirects the archive.org installer request (Playwright route → 302) to
-that URL: a plain-HTTP local server with CORS headers serving a `GTA2INSTALLER.exe` you already
-have (in this sandbox `python3 -I <scratchpad>/mirror/serve.py <exe>` on 127.0.0.1:8443, the
-exe under `<scratchpad>/gta2inst/`). **Always set it**: without it a fresh profile downloads
-from archive.org at ~1 MB/min. The game files are ~67 MB of IndexedDB once unpacked.
-
-**Probes pollute each other**: `autostart.js` presses Continue when an autosave exists, so the
-next probe resumes the previous one's world (cars left on the test road → failed spawns, the
-car entering a wrong one, rear-endings that look like braking). Delete the save database first:
-`indexedDB.deleteDatabase('gta2-port-states')` from a page of the origin, then `startGame`.
-The long road (`gta2_dev_find_road`) has traffic: a lane change at speed can hit a car.
-
-## Gotchas met so far
-
-- Upstream's `build_pages.py` refuses `*.wav` (game-file suffix) → the silent loop is an
-  inline data URI, so a future upstream rebuild can carry `mobile/` as is.
-- Pages `index.html`/`boot.js` can lag 10 min; everything under `mobile/` is instant thanks to
-  the timestamped loader.
+Probes start **clean** (`h.startClean`), drive in the open square or on the long road, wait for
+the dev state before driving, and record per frame (`h.record`). Everything else: `notes/testing.md`.
