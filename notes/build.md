@@ -32,8 +32,9 @@ re-creates the core from the patches, so the core's history is ours to rewrite.
 ## Port files we own
 
 - `port/platform/steer_web.cpp` — `gta2_port_set_steer_target`, `_set_steer_params`,
-  `_set_steer_ramp` (soft zone), `_steer_debug`; `Gta2Port_SteerOverride` / `Gta2Port_SteerScale`
-  called from patch 0027 (see `notes/engine.md`, Cars).
+  `_set_steer_ramp` (soft zone), `_set_steer_grip` (no sliding), `_steer_debug`;
+  `Gta2Port_SteerOverride` / `Gta2Port_SteerScale` called from patch 0027 (see
+  `notes/engine.md`, Cars).
 - `port/platform/mobile_camera_web.cpp` — `gta2_port_set_camera_lead(k, max)` (the camera
   itself is pinned to its target in patch 0026).
 - `port/platform/dev_hooks.cpp` — `gta2_dev_*` (`find_open` is ours).

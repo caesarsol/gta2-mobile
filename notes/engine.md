@@ -101,6 +101,15 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   the target. `gta2_port_steer_debug()` → [active, error, ω, key sent, lock scale].
 - Rejected: pulsing the key inside the zone (sigma-delta duty cycle, build 2764a1dd): with a
   wide zone (40°) the on/off ticks were visible as the old jitter. Removed.
+- **Grip = no sliding (steer_web.cpp, `gta2_port_set_steer_grip(0..256)`, Tune `steerGrip`
+  %, default 100)**: the user felt no difference from the soft zone and asked for something
+  extreme and GTA1-like. Once per tick, before the physics step, the local player's car's
+  velocity (`CarPhysics_B0::field_40_linvel_1`, the vector `ApplyMovementStep_560F20`
+  integrates) is turned onto its heading — same speed, same sense (forward / reversing) — by
+  grip/256; at 256 the slip angle is always 0 and the car keeps its speed through turns, the
+  handling data's skid thresholds no longer matter. Applied whether or not a steering target is
+  set (a coasting car would slide otherwise). Side effects accepted: a sideways push (another
+  car, an explosion) is cancelled the next tick, so the car cannot be shoved sideways.
 - The overlay shows `Car <model>` under the weapon pills while driving (model = handling index).
 
 ## Camera

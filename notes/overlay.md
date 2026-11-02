@@ -14,7 +14,8 @@ Design decisions and mechanics of `mobile.js` / `mobile.css` / `autostart.js` / 
   stopping again beyond 2× (hysteresis).
   Turning uses the measured hold→tap controller (`notes/engine.md`, On foot).
 - **In a car**: any distance beyond the dead zone drives; the engine steers
-  (`setSteerTarget`, soft zone `steerSoft` → `gta2_port_set_steer_ramp`), the overlay holds W or S. Pointing more than `revEnter` (130°) behind the
+  (`setSteerTarget`, soft zone `steerSoft` → `gta2_port_set_steer_ramp`, grip `steerGrip` →
+  `gta2_port_set_steer_grip`), the overlay holds W or S. Pointing more than `revEnter` (130°) behind the
   car = reverse (exit below `revExit`, 100°), drawn as the red sector; A/D are flipped in reverse.
 - Rejected / removed: a JS-side predictive release for cars (replaced by the engine override),
   damping code (the user asked to remove it).
@@ -79,7 +80,7 @@ the midpoint pan are driven by us until all fingers lift.
 
 `camTick` (per frame) keeps the drawn height at `camFoot` / `camCar` through
 `gta2_port_set_camera(mode, bias)`, mode from `localStorage['gta2-port-camera']` ('mobile' = 2).
-`applySteerParams` sends `gta2_port_set_steer_params`, `_set_steer_ramp`,
+`applySteerParams` sends `gta2_port_set_steer_params`, `_set_steer_ramp`, `_set_steer_grip`,
 `gta2_port_set_camera_lead(camLead, 3)` (default 0: the car stays centred) and
 `gta2_port_set_hud_inset` (side padding → reference px) whenever a value changes. Details and
 measurements: `notes/engine.md`.
