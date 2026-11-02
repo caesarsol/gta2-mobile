@@ -152,11 +152,13 @@
       <button type="button" class="gta-pill" id="gtaWeaponNext" data-tap="KeyK" aria-label="Next weapon">▶</button>
     </div>
     <div id="gtaTunePanel" class="gta-panel" hidden>
-      <div class="gta-panel-title">Tune controls</div>
-      <div class="gta-tune-rows"></div>
-      <div class="gta-panel-actions">
-        <button type="button" class="gta-pill gta-pill--danger gta-tune-reset">Reset defaults</button>
-        <button type="button" class="gta-pill gta-pill--primary gta-tune-close">Close</button>
+      <button type="button" class="gta-pill gta-panel-close gta-tune-close" aria-label="Close">✕</button>
+      <div class="gta-panel-scroll">
+        <div class="gta-panel-title">Tune controls</div>
+        <div class="gta-tune-rows"></div>
+        <div class="gta-panel-actions">
+          <button type="button" class="gta-pill gta-pill--danger gta-tune-reset">Reset defaults</button>
+        </div>
       </div>
     </div>
   `;
@@ -620,12 +622,23 @@
   const tunePanel = root.querySelector('#gtaTunePanel');
   const tuneRows = tunePanel.querySelector('.gta-tune-rows');
   const fmtVal = (d, v) => (d.step < 1 ? v.toFixed(1) : String(Math.round(v)));
+  // Labels are "Group · item": the rows are grouped under a title per group, flowing in columns
+  // so a group stays together (the groups follow TUNE_DEFS order).
   function renderTune() {
     tuneRows.innerHTML = '';
+    let groupEl = null, groupName = null;
     for (const d of TUNE_DEFS) {
+      const [group, item] = d.label.includes(' · ') ? d.label.split(' · ') : ['Other', d.label];
+      if (group !== groupName) {
+        groupName = group;
+        groupEl = document.createElement('div');
+        groupEl.className = 'gta-tune-group';
+        groupEl.innerHTML = `<div class="gta-tune-group-title">${group}</div>`;
+        tuneRows.appendChild(groupEl);
+      }
       const row = document.createElement('div');
       row.className = 'gta-tune-row';
-      row.innerHTML = `<div class="gta-tune-label">${d.label} <span class="gta-tune-q">?</span></div>
+      row.innerHTML = `<div class="gta-tune-label">${item} <span class="gta-tune-q">?</span></div>
         <button type="button" class="gta-pill" data-dir="-1">−</button>
         <div class="gta-tune-value">${fmtVal(d, T[d.k])}</div>
         <button type="button" class="gta-pill" data-dir="1">+</button>
@@ -644,7 +657,7 @@
         });
       }
       if (T[d.k] !== d.def) valueEl.classList.add('is-changed');
-      tuneRows.appendChild(row);
+      groupEl.appendChild(row);
     }
   }
   onTap(root.querySelector('#gtaTune'), () => { renderTune(); tunePanel.hidden = false; });
