@@ -1,0 +1,33 @@
+From 0784b73ea5673dde3702907fc3115c5c58eb8ab5 Mon Sep 17 00:00:00 2001
+From: caesarsol <smilemachine@gmail.com>
+Date: Mon, 2 Nov 2026 00:09:51 +0000
+Subject: [PATCH] port: Mobile camera (mode 2): centred on the car, no lead and
+ no height from speed
+
+---
+ Source/Camera.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/Source/Camera.cpp b/Source/Camera.cpp
+index 75de08d0..be73026a 100644
+--- a/Source/Camera.cpp
++++ b/Source/Camera.cpp
+@@ -295,6 +295,15 @@ MATCH_FUNC(0x436200)
+ void Camera_0xBC::ApplyCarVelocityCameraOffset_436200(Car_BC* pCar, Fix16* pX, Fix16* pY, Fix16* pZ)
+ {
+     // 9.6f 0x41EBF0: this source matches it exactly when built with VC7 (compile_vc7.sh, permuter_score.py --96f)
++#ifdef GTA2_PORT
++    // Mobile camera (mode 2): the camera stays centred on the car, as on foot. The original
++    // leads up to ~4 blocks ahead and rises with speed, which on a phone puts the car under
++    // the thumb on the stick and makes the view sway.
++    if (gGta2PortCameraMode == 2)
++    {
++        return;
++    }
++#endif
+     Ang16 angle;
+     Fix16_Point vel;
+     Fix16_Point offset;
+-- 
+2.43.0
+
