@@ -74,7 +74,8 @@ node scripts/headless.js                                        # smoke test: cl
    measurements before that are noise.
 6. **Record per frame**: `const r = await h.record(page, ms)` → `await r.rows()`: `t`,
    `heading` (deg), `x`, `y` (blocks), `speed` (blocks/tick, magnitude), `keys` held, `steer`
-   (engine steering debug `[active, error, omega, decision]`), stick `gear` / `mode`. Velocity
+   (engine steering debug, 12 ints: `[active, error, omega, key, scale, slip, lateral v, speed,
+   skid F, skid R, assist, pedal]`, see `notes/engine.md` Cars), stick `gear` / `mode`. Velocity
    direction from positions is `atan2(dx, dy)` (map coords, y down; forward = `(sin a, cos a)`);
    slip angle = that − heading. Sampling is per animation frame (≈ 1–2 engine ticks at 30 Hz):
    a key *tapped* inside one frame is invisible to a per-frame `keys` sample — log the events

@@ -10,7 +10,8 @@ gta2-browser with our patches; M1sterMo's last build (`3213c238…`) is kept und
 1. clones `gta2-browser` at the pinned commit (66d3462) into `<work>`, applies
    `engine/port-web.patch` (our changes to `port/`, `web/`, `scripts/` there) and the gta2_re
    patches `engine/00NN-*.patch` (0026 Mobile camera: mode 2, pinned to its target, look-ahead
-   hook; 0027 steering: key override hook + wheel-angle scale hook) onto `research/port-work/core`
+   hook; 0027 steering: key override hook, wheel-angle scale hook, road assist off + note hooks;
+   0028 analog throttle cap hook) onto `research/port-work/core`
    (stale copies of our patches in `port/patches` are removed first);
 2. installs Emscripten 6.0.12 under `research/toolchains/emsdk` (first time only, ~300 MB; the
    download was once blocked by a classifier and then went through on retry) and the prebuilt
@@ -32,9 +33,10 @@ re-creates the core from the patches, so the core's history is ours to rewrite.
 ## Port files we own
 
 - `port/platform/steer_web.cpp` — `gta2_port_set_steer_target`, `_set_steer_params`,
-  `_set_steer_ramp` (soft zone), `_set_steer_grip` (no sliding), `_steer_debug`;
-  `Gta2Port_SteerOverride` / `Gta2Port_SteerScale` called from patch 0027 (see
-  `notes/engine.md`, Cars).
+  `_set_steer_ramp` (soft zone), `_set_steer_grip` (no sliding), `_set_throttle` (pedal cap),
+  `_steer_debug` (12 ints); `Gta2Port_SteerOverride` / `Gta2Port_SteerScale` /
+  `Gta2Port_SteerAssistOff` / `Gta2Port_NoteSteerAssist` called from patch 0027,
+  `Gta2Port_ThrottleCap` from 0028 (see `notes/engine.md`, Cars).
 - `port/platform/mobile_camera_web.cpp` — `gta2_port_set_camera_lead(k, max)` (the camera
   itself is pinned to its target in patch 0026).
 - `port/platform/dev_hooks.cpp` — `gta2_dev_*` (`find_open` is ours).
@@ -68,3 +70,10 @@ re-creates the core from the patches, so the core's history is ours to rewrite.
   rebuild then shows no `old/` change). The `old/` list is for builds a phone may have saves of.
 - The build is deterministic: the same sources give the same `gta2.wasm` (consolidating the
   patches reproduced 02bb1fc4 exactly), so a patch-only change needs no new archive.
+- **`engine/port-web.patch` must carry the new port files whole.** They are `git add -N`
+  (intent-to-add) in the work tree, so a plain `git diff` of the paths shows them as `new file`;
+  check `grep '^new file' engine/port-web.patch` after regenerating. `build.sh` resets the tree
+  to the pinned commit and re-applies the patch whenever the reverse-apply check fails (any edit
+  since the last export), so a partial patch would silently drop the rest of a file.
+- The core's commit hashes change on every `--prepare` (the core is re-created from the
+  patches): take the hash to `--fixup` from `git log` at that moment, never from a note.

@@ -1,34 +1,44 @@
-From f4cabcf50bcdfdd3988dd3476e49103d6576ff83 Mon Sep 17 00:00:00 2001
+From f5a4d43966deb277ad8990635240ccb002fbd882 Mon Sep 17 00:00:00 2001
 From: caesarsol <smilemachine@gmail.com>
 Date: Mon, 2 Nov 2026 01:04:52 +0000
-Subject: [PATCH 27/27] port: engine-side steering for the local player's car
+Subject: [PATCH 27/28] port: engine-side steering for the local player's car
  (GTA2 Mobile joystick)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 Car_BC::HandleUserInput_4418D0 asks the port for the left / right keys (Gta2Port_SteerOverride)
 and CarPhysics_B0::UpdateSteeringAngle_562560 for a wheel-angle scale (Gta2Port_SteerScale,
 0..256): the port steers toward the joystick's target heading once per tick with the exact
 heading and angular velocity, with a proportional lock near the target
 (port/platform/steer_web.cpp).
+
+CarPhysics_B0::ApplyArrowSteerAssist_5626F0 (the snap to a road's axis within 25° while the
+wheels are straight) is skipped for that car while the port steers it (Gta2Port_SteerAssistOff):
+the two fought each other a few degrees off a road's axis (one jab per four ticks). The applied
+correction is reported to the port (Gta2Port_NoteSteerAssist) for its debug charts.
 ---
- Source/CarPhysics_B0.cpp | 13 +++++++++++++
+ Source/CarPhysics_B0.cpp | 26 ++++++++++++++++++++++++++
  Source/Car_BC.cpp        |  7 +++++++
- 2 files changed, 20 insertions(+)
+ 2 files changed, 33 insertions(+)
 
 diff --git a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
-index 5dbd93e6..6aaec716 100644
+index 5dbd93e6..5e71ee53 100644
 --- a/Source/CarPhysics_B0.cpp
 +++ b/Source/CarPhysics_B0.cpp
-@@ -1,5 +1,9 @@
+@@ -1,5 +1,11 @@
  // This TU's copy of the Fix16_Point length zero (see Fix16_Point.hpp)
  #define FIX16_POINT_ZERO kFP16Zero_6FE20C
 +#ifdef GTA2_PORT
 +class Car_BC;
 +extern "C" int Gta2Port_SteerScale(Car_BC* car);
++extern "C" int Gta2Port_SteerAssistOff(Car_BC* car);
++extern "C" void Gta2Port_NoteSteerAssist(Car_BC* car, int correction);
 +#endif
  
  #include "ped_death_cause.hpp"
  #include "explosion_type.hpp"
-@@ -3399,6 +3403,15 @@ void CarPhysics_B0::UpdateSteeringAngle_562560()
+@@ -3399,6 +3405,15 @@ void CarPhysics_B0::UpdateSteeringAngle_562560()
          }
          field_78_pointing_ang_rad = GetScaledTurnRatio(v6 / (dword_6FE228 * dword_6FE104), field_AD_turn_direction);
      }
@@ -44,6 +54,31 @@ index 5dbd93e6..6aaec716 100644
  }
  
  MATCH_FUNC(0x5626a0)
+@@ -3426,6 +3441,14 @@ void CarPhysics_B0::ApplyArrowSteerAssist_5626F0()
+ {
+     Fix16 theta_fp = Ang16::Ang16_to_Fix16(field_58_theta);
+     dword_6FE0B0 = kFP16Zero_6FE20C;
++#ifdef GTA2_PORT
++    // GTA2 Mobile: no road snap for the local player's car while the joystick sets a heading
++    // (the assist pulls to the road's axis every tick the key is up, the port steers back).
++    if (Gta2Port_SteerAssistOff(this->field_5C_pCar))
++    {
++        return;
++    }
++#endif
+     CarAI_78* pAi = this->field_5C_pCar->field_5C_AI;
+     if ((!pAi || (pAi->field_24_flags & 0x2000) != 0) && this->field_78_pointing_ang_rad == kFP16Zero_6FE20C)
+     {
+@@ -3511,6 +3534,9 @@ void CarPhysics_B0::ApplyArrowSteerAssist_5626F0()
+                                 }
+                             }
+ 
++#ifdef GTA2_PORT
++                            Gta2Port_NoteSteerAssist(this->field_5C_pCar, dword_6FE0B0.mValue);
++#endif
+                             this->field_74_ang_vel_rad += dword_6FE0B0;
+                         }
+                     }
 diff --git a/Source/Car_BC.cpp b/Source/Car_BC.cpp
 index c7710a15..d1f6456b 100644
 --- a/Source/Car_BC.cpp

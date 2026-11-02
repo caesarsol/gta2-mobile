@@ -129,6 +129,32 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   (the park measurement above still holds). With grip 100 the velocity follows every jab, so
   the lateral position (and the pinned camera) jitters too; with grip 0 only the heading.
   Also of interest there: `field_60_gas_pedal` is an analog pedal (`IsGasPedalPressedEnough`).
+- **Road assist off under the stick (patch 0027, `Gta2Port_SteerAssistOff`)**: the fix for the
+  jitter above. `ApplyArrowSteerAssist_5626F0` returns right after zeroing its correction for
+  the local player's car while a steering target is set; with the stick released (target −1)
+  the snap is back, so a coasting car still straightens on a road. The correction the assist
+  does apply (Fix16 radians, ÷71 = Ang16 units/tick) is reported through
+  `Gta2Port_NoteSteerAssist` → `steer_debug[10]` (the charts' "snap" series). Verified
+  (2026-11-02, same probe as above, grip 100 and 0): the car holds 5.3° for the whole run, 0 key
+  flips, 0 frames of active steering, camera path smooth (2nd difference ≤ 0.015 blocks).
+- **Analog throttle (patch 0028, `Gta2Port_ThrottleCap`, `gta2_port_set_throttle(0..256)`)**:
+  `ApplyThrottleInput_562480` ramps `field_60_gas_pedal` by 0.25/tick to 5.0 (forward and
+  reverse, same cap `k_dword_6FDEFC`; release −0.25/tick to 0). The port caps it for the local
+  player's car at `5 × throttle / 256`; above the cap the pedal eases down at the release rate.
+  What the pedal does: torque = `half_thrust + fifth_thrust × pedal` (× damage factor, × gear
+  multiplier; `ComputeTorqueFromThrottle_561DD0`), i.e. pedal 0 still gives half the model's
+  thrust and pedal 5 gives 1.5×: a 3:1 range of engine force, not of speed. The speed limit
+  (`EnforceGearSensitiveMaxSpeed_562D00`, `field_28_max_speed`) does not depend on the pedal.
+  Measured (2026-11-02, Z-Type, long road, stick along the axis, 5 s): stick 40 px → pedal
+  1.11, steady 0.08 blocks/tick; 75 px → pedal 3.05, 0.19; 130 px → pedal 5, 0.30 (still
+  rising at 5 s, top ~0.32). Drag makes the steady speed roughly follow the torque, so the stick
+  distance does act as a speed control, 1:4 between the dead zone and full.
+- **`gta2_port_steer_debug()` is 12 ints** (previous-tick physics for 5..11, read before the
+  grip step): 0 active, 1 error, 2 ω (units/tick), 3 key, 4 lock scale, 5 slip (velocity
+  direction − heading in the sense of travel, Ang16, + = left), 6 lateral velocity (Fix16,
+  + = left), 7 speed (Fix16), 8/9 front/rear wheel force ÷ the handling's skid threshold × 256
+  (≥ 256 = skidding, the engine's skidmark / sound test), 10 road assist correction
+  (units/tick), 11 gas pedal (Fix16, 0..5).
 - The overlay shows `Car <model>` under the weapon pills while driving (model = handling index).
 
 ## Camera

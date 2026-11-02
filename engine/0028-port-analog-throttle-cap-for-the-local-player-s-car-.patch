@@ -1,0 +1,54 @@
+From fdf2895f8bbc9901c2149eb087350d4c3625d2ca Mon Sep 17 00:00:00 2001
+From: caesarsol <smilemachine@gmail.com>
+Date: Mon, 2 Nov 2026 20:13:02 +0000
+Subject: [PATCH 28/28] port: analog throttle cap for the local player's car
+ (GTA2 Mobile joystick distance)
+
+CarPhysics_B0::ApplyThrottleInput_562480 ramps the gas pedal (field_60_gas_pedal, 0..5 in 20
+ticks) while the gas key is held. The port can cap it for the local player's car
+(Gta2Port_ThrottleCap(car, max) returns the cap, port/platform/steer_web.cpp): the joystick's
+distance from the centre becomes a partial throttle. Above the cap the pedal eases down at the
+release rate.
+---
+ Source/CarPhysics_B0.cpp | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
+index 5e71ee53..8f7c5a59 100644
+--- a/Source/CarPhysics_B0.cpp
++++ b/Source/CarPhysics_B0.cpp
+@@ -5,6 +5,7 @@ class Car_BC;
+ extern "C" int Gta2Port_SteerScale(Car_BC* car);
+ extern "C" int Gta2Port_SteerAssistOff(Car_BC* car);
+ extern "C" void Gta2Port_NoteSteerAssist(Car_BC* car, int correction);
++extern "C" int Gta2Port_ThrottleCap(Car_BC* car, int maxPedal);
+ #endif
+ 
+ #include "ped_death_cause.hpp"
+@@ -3351,6 +3352,23 @@ void CarPhysics_B0::ApplyThrottleInput_562480()
+             this->field_60_gas_pedal = k_dword_6FE290;
+         }
+     }
++#ifdef GTA2_PORT
++    // GTA2 Mobile: the joystick's distance caps the gas pedal of the local player's car
++    // (Gta2Port_ThrottleCap, port/platform/steer_web.cpp; every other car keeps the full pedal).
++    // Above the cap the pedal eases down at the release rate instead of jumping.
++    if (this->field_93_is_forward_gas_on || this->field_94_is_backward_gas_on)
++    {
++        const s32 cap = Gta2Port_ThrottleCap(this->field_5C_pCar, k_dword_6FDEFC.mValue);
++        if (this->field_60_gas_pedal.mValue > cap)
++        {
++            this->field_60_gas_pedal.mValue -= k_dword_6FE3A0.mValue + k_dword_6FE364.mValue;
++            if (this->field_60_gas_pedal.mValue < cap)
++            {
++                this->field_60_gas_pedal.mValue = cap;
++            }
++        }
++    }
++#endif
+ }
+ 
+ MATCH_FUNC(0x5624f0)
+-- 
+2.43.0
+

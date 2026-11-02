@@ -113,10 +113,10 @@ index 0000000..23bc91f
 +}
 diff --git a/port/platform/steer_web.cpp b/port/platform/steer_web.cpp
 new file mode 100644
-index 0000000..916435b
+index 0000000..6f23b48
 --- /dev/null
 +++ b/port/platform/steer_web.cpp
-@@ -0,0 +1,199 @@
+@@ -0,0 +1,285 @@
 +// GTA2 Mobile: steer the local player's car toward a target heading inside the physics tick.
 +//
 +// The touch overlay's joystick gives a direction of travel, but the game only takes left /
@@ -143,14 +143,25 @@ index 0000000..916435b
 +// handling data says about skidding. 0 = the original physics. Applied to the local player's
 +// car whenever it is simulated, steering target or not (a coasting car would slide otherwise).
 +//
++// Road steer assist: GTA2 snaps a car whose wheels are straight to the axis of the road it is
++// on (CarPhysics_B0::ApplyArrowSteerAssist_5626F0, within 25°). While a steering target is set
++// the assist is skipped for this car (Gta2Port_SteerAssistOff): the two fought a few degrees
++// off a road's axis (the assist pulls every tick the key is up, the override jabs back). With
++// the stick released the assist is back.
++//
++// Throttle: the joystick's distance caps the engine's analog gas pedal (field_60_gas_pedal,
++// 0..5, ramped by ApplyThrottleInput_562480) for this car: gta2_port_set_throttle(0..256) →
++// cap = full pedal × throttle / 256 (Gta2Port_ThrottleCap, patch 0028).
++//
 +// gta2_port_set_steer_target(units): target heading in Ang16 units (0..1439, 4 per degree),
 +// -1 = off (the keys steer as usual). gta2_port_set_steer_params(kd, band): momentum look-ahead
 +// in ticks and dead band in Ang16 units. gta2_port_set_steer_ramp(units): soft zone width in
 +// Ang16 units (0 = always full lock). gta2_port_set_steer_grip(g): velocity realignment per
-+// tick, 0..256.
++// tick, 0..256. gta2_port_set_throttle(t): gas pedal cap, 0..256.
 +#include <emscripten.h>
 +#include <math.h>
 +#include "Car_BC.hpp"
++#include "CarInfo_808.hpp"
 +#include "CarPhysics_B0.hpp"
 +#include "Game_0x40.hpp"
 +#include "Ped.hpp"
@@ -163,6 +174,7 @@ index 0000000..916435b
 +s32 gGta2PortSteerBand = 6;   // stop steering within this (Ang16 units; 4 = 1°); restart beyond 2× it
 +s32 gGta2PortSteerRamp = 120; // soft zone: lock = |predicted| / ramp while below it (Ang16 units; 120 = 30°)
 +s32 gGta2PortSteerGrip = 256; // velocity turned onto the heading by grip/256 per tick (256 = never slides)
++s32 gGta2PortThrottle = 256;  // gas pedal cap, 0..256 of the full pedal
 +
 +EMSCRIPTEN_KEEPALIVE void gta2_port_set_steer_target(int units)
 +{
@@ -185,19 +197,41 @@ index 0000000..916435b
 +    gGta2PortSteerGrip = grip < 0 ? 0 : grip > 256 ? 256 : grip;
 +}
 +
-+// Debug: [active, error units, angular velocity units/tick, decision -1/0/1, lock scale 0..256]
++EMSCRIPTEN_KEEPALIVE void gta2_port_set_throttle(int throttle)
++{
++    gGta2PortThrottle = throttle < 0 ? 0 : throttle > 256 ? 256 : throttle;
++}
++
++// Debug, 12 ints, refreshed once per tick for the local player's car (zeros otherwise):
++//  0 active (a steering target is set)   1 error (Ang16 units, + = turn left)
++//  2 angular velocity (units/tick)       3 key sent (-1/0/1)   4 lock scale (0..256)
++//  5 slip angle: velocity direction − heading, in the sense of travel (units, + = left)
++//  6 lateral velocity (Fix16 blocks/tick, + = left)   7 speed (Fix16 blocks/tick)
++//  8 front skid / threshold × 256   9 rear skid / threshold × 256 (≥ 256 = skidding)
++// 10 road assist correction applied last tick (units/tick)   11 gas pedal (Fix16, 0..5)
++// 5..11 are the physics' output of the previous tick, read before this tick's grip step.
 +EMSCRIPTEN_KEEPALIVE const s32* gta2_port_steer_debug();
 +}
 +
 +namespace
 +{
-+s32 gDebug[5];
++s32 gDebug[12];
 +const s32 kFullScale = 256;
 +const s32 kMinScale = 32;              // never below 1/8 lock (only reached with a very wide zone)
 +const s32 kSoftFullSpeed = 16384 / 4;  // Fix16 blocks/tick (0.25): the soft zone is full from here up
 +
 +Car_BC* gScaledCar = nullptr; // the car whose wheel angle is scaled this tick
 +s32 gScale = kFullScale;
++s32 gAssist = 0;              // road assist correction noted during the last physics update (Fix16 rad)
++
++s32 SkidRatio(const Fix16& skid, const Fix16& threshold)
++{
++    if (threshold.mValue <= 0)
++    {
++        return skid.mValue > 0 ? 256 : 0;
++    }
++    return (s32)(((__int64)skid.mValue * 256) / threshold.mValue);
++}
 +
 +Ped* LocalPlayerPed()
 +{
@@ -220,18 +254,51 @@ index 0000000..916435b
 +    return car && car == gScaledCar ? gScale : kFullScale;
 +}
 +
++namespace
++{
++bool IsLocalPlayerCar(Car_BC* car)
++{
++    if (!car || !car->field_58_physics)
++    {
++        return false;
++    }
++    Ped* local = LocalPlayerPed();
++    return local && local->get_car_416B60() == car;
++}
++} // namespace
++
++// Called from CarPhysics_B0::ApplyArrowSteerAssist_5626F0 (patch 0027): skip the road snap?
++extern "C" int Gta2Port_SteerAssistOff(Car_BC* car)
++{
++    return gGta2PortSteerTarget >= 0 && IsLocalPlayerCar(car) ? 1 : 0;
++}
++
++// Called from the same function with the correction it is about to apply (Fix16 radians).
++extern "C" void Gta2Port_NoteSteerAssist(Car_BC* car, int correction)
++{
++    if (IsLocalPlayerCar(car))
++    {
++        gAssist = correction;
++    }
++}
++
++// Called from CarPhysics_B0::ApplyThrottleInput_562480 (patch 0028): the gas pedal cap (Fix16).
++extern "C" int Gta2Port_ThrottleCap(Car_BC* car, int maxPedal)
++{
++    if (gGta2PortThrottle >= 256 || !IsLocalPlayerCar(car))
++    {
++        return maxPedal;
++    }
++    return (s32)(((__int64)maxPedal * gGta2PortThrottle) / 256);
++}
++
 +// Called from Car_BC::HandleUserInput_4418D0 (patch 0027) before the keys are used.
 +extern "C" void Gta2Port_SteerOverride(Car_BC* car, char* bLeftOn, char* bRightOn)
 +{
 +    gDebug[0] = 0;
 +    gScaledCar = nullptr;
 +    gScale = kFullScale;
-+    if (!car || !car->field_58_physics)
-+    {
-+        return;
-+    }
-+    Ped* local = LocalPlayerPed();
-+    if (!local || local->get_car_416B60() != car)
++    if (!IsLocalPlayerCar(car))
 +    {
 +        return;
 +    }
@@ -239,11 +306,28 @@ index 0000000..916435b
 +    // Reversing: the velocity points against the heading (the physics' own test).
 +    bool reversing = false;
 +    s32 speed = 0; // Fix16 blocks/tick
++    s32 slip = 0;  // Ang16 units, in the sense of travel
 +    if (!phys->field_40_linvel_1.IsNull())
 +    {
 +        const Ang16 rel = phys->field_40_linvel_1.atan2_40F790() - phys->field_58_theta;
 +        reversing = !(rel <= 360 || rel >= 1080);
 +        speed = phys->field_40_linvel_1.GetLength_41E260().mValue;
++        slip = (((rel.rValue - (reversing ? 720 : 0)) % 1440 + 1440 + 720) % 1440) - 720;
++    }
++    // Previous tick's physics output, for the overlay's charts (before this tick's grip step).
++    {
++        const double th = phys->field_58_theta.rValue * (M_PI * 2 / 1440);
++        const Fix16_Point& v = phys->field_40_linvel_1;
++        // lateral = v × forward, forward = (sin θ, cos θ) in map coordinates; + = the car's left
++        gDebug[5] = slip;
++        gDebug[6] = (s32)(v.x.mValue * cos(th) - v.y.mValue * sin(th));
++        gDebug[7] = speed;
++        const CarInfo_2C* info = gCarInfo_808_678098 ? gCarInfo_808_678098->GetInfoAtIdx_454840(car->GetCarModelForPhysics_43A850()) : nullptr;
++        gDebug[8] = info ? SkidRatio(phys->field_84_front_skid, info->field_24_skid_threshhold_1) : 0;
++        gDebug[9] = info ? SkidRatio(phys->field_88_rear_skid, info->field_28_skid_threshhold_2) : 0;
++        gDebug[10] = gAssist / 71;
++        gDebug[11] = phys->field_60_gas_pedal.mValue;
++        gAssist = 0;
 +    }
 +    // Grip: turn the velocity onto the heading (see the top of the file).
 +    if (gGta2PortSteerGrip > 0 && speed > 0)
@@ -257,6 +341,8 @@ index 0000000..916435b
 +    }
 +    if (gGta2PortSteerTarget < 0)
 +    {
++        gDebug[1] = gDebug[2] = gDebug[3] = 0;
++        gDebug[4] = kFullScale;
 +        return;
 +    }
 +    const s32 theta = phys->field_58_theta.rValue;
@@ -370,7 +456,7 @@ index fc68fc5..ef87b94 100644
  }
  
 diff --git a/scripts/build_port.py b/scripts/build_port.py
-index 31a1e84..7a764a5 100644
+index 31a1e84..2bbb15d 100644
 --- a/scripts/build_port.py
 +++ b/scripts/build_port.py
 @@ -53,7 +53,7 @@ LINK = [
@@ -378,7 +464,7 @@ index 31a1e84..7a764a5 100644
      '-sEXPORT_NAME=createGta2', '-sFORCE_FILESYSTEM=1',
      '-sEXPORTED_RUNTIME_METHODS=FS,HEAPU8,HEAPU16,HEAP32,HEAPF32,HEAPF64,ccall,cwrap',
 -    '-sEXPORTED_FUNCTIONS=_main,_malloc,_free,_gta2_start,_gta2_port_key,_gta2_port_mouse_move,_gta2_port_mouse_button,_gta2_port_release_all_keys,_gta2_port_reg_set_dword,_gta2_port_reg_set_string,_gta2_port_reg_export,_gta2_port_set_language,_gta2_port_input_stats,_gta2_dev_state,_gta2_dev_spawn_car,_gta2_dev_add_cash,_gta2_dev_give_weapon,_gta2_port_set_view_width,_gta2_dev_camera,_gta2_port_set_activation_margin,_gta2_port_set_camera,_gta2_dev_teleport,_gta2_dev_find_road,_gta2_port_map_state,_gta2_port_map_render_rows,_gta2_port_set_paused,_gta2_port_map_objects,_gta2_dev_object_models,_gta2_port_map_triggers,_gta2_port_map_gangs,_gta2_port_map_arrows,_gta2_port_set_hud_arrows,_gta2_port_sprite_rgba,_gta2_port_set_hud_edges,_gta2_dev_unlock_areas,_gta2_dev_set_respect,_gta2_dev_spawn_truck,_gta2_dev_truck_state,_gta2_port_set_interpolation,_gta2_dev_drawn_camera,_gta2_port_net_configure,_gta2_port_net_set_name,_gta2_port_net_receive,_gta2_port_net_peer_left,_gta2_port_net_set_map,_gta2_port_run_slice,_gta2_port_net_debug,_gta2_dev_sync_state,_gta2_dev_sync_history,_gta2_dev_sync_dump,_gta2_dev_sync_peds,_gta2_port_coop_players,_gta2_port_take_frame_ms,_gta2_port_set_friendly_fire,_gta2_port_net_set_rules,_gta2_port_set_player_team,_gta2_dev_test_friendly_fire,_gta2_dev_gang_respect,_gta2_port_set_ride_together,_gta2_dev_seat_player_driver,_gta2_dev_car_occupants,_gta2_dev_ride_check,_gta2_dev_ped_entry,_gta2_port_savestate_can_save,_gta2_port_savestate_prepare,_gta2_port_savestate_reserve,_gta2_port_savestate_restored,_gta2_port_savestate_label,_gta2_port_savestate_rules,_gta2_port_savestate_pay,_gta2_port_job_briefs,_gta2_port_reload_controls',
-+    '-sEXPORTED_FUNCTIONS=_main,_malloc,_free,_gta2_start,_gta2_port_key,_gta2_port_mouse_move,_gta2_port_mouse_button,_gta2_port_release_all_keys,_gta2_port_reg_set_dword,_gta2_port_reg_set_string,_gta2_port_reg_export,_gta2_port_set_language,_gta2_port_input_stats,_gta2_dev_state,_gta2_dev_spawn_car,_gta2_dev_add_cash,_gta2_dev_give_weapon,_gta2_port_set_view_width,_gta2_dev_camera,_gta2_port_set_activation_margin,_gta2_port_set_camera,_gta2_dev_teleport,_gta2_dev_find_road,_gta2_dev_find_open,_gta2_port_set_steer_target,_gta2_port_set_steer_params,_gta2_port_set_steer_ramp,_gta2_port_steer_debug,_gta2_port_set_camera_lead,_gta2_port_set_steer_grip,_gta2_port_set_hud_inset,_gta2_port_map_state,_gta2_port_map_render_rows,_gta2_port_set_paused,_gta2_port_map_objects,_gta2_dev_object_models,_gta2_port_map_triggers,_gta2_port_map_gangs,_gta2_port_map_arrows,_gta2_port_set_hud_arrows,_gta2_port_sprite_rgba,_gta2_port_set_hud_edges,_gta2_dev_unlock_areas,_gta2_dev_set_respect,_gta2_dev_spawn_truck,_gta2_dev_truck_state,_gta2_port_set_interpolation,_gta2_dev_drawn_camera,_gta2_port_net_configure,_gta2_port_net_set_name,_gta2_port_net_receive,_gta2_port_net_peer_left,_gta2_port_net_set_map,_gta2_port_run_slice,_gta2_port_net_debug,_gta2_dev_sync_state,_gta2_dev_sync_history,_gta2_dev_sync_dump,_gta2_dev_sync_peds,_gta2_port_coop_players,_gta2_port_take_frame_ms,_gta2_port_set_friendly_fire,_gta2_port_net_set_rules,_gta2_port_set_player_team,_gta2_dev_test_friendly_fire,_gta2_dev_gang_respect,_gta2_port_set_ride_together,_gta2_dev_seat_player_driver,_gta2_dev_car_occupants,_gta2_dev_ride_check,_gta2_dev_ped_entry,_gta2_port_savestate_can_save,_gta2_port_savestate_prepare,_gta2_port_savestate_reserve,_gta2_port_savestate_restored,_gta2_port_savestate_label,_gta2_port_savestate_rules,_gta2_port_savestate_pay,_gta2_port_job_briefs,_gta2_port_reload_controls',
++    '-sEXPORTED_FUNCTIONS=_main,_malloc,_free,_gta2_start,_gta2_port_key,_gta2_port_mouse_move,_gta2_port_mouse_button,_gta2_port_release_all_keys,_gta2_port_reg_set_dword,_gta2_port_reg_set_string,_gta2_port_reg_export,_gta2_port_set_language,_gta2_port_input_stats,_gta2_dev_state,_gta2_dev_spawn_car,_gta2_dev_add_cash,_gta2_dev_give_weapon,_gta2_port_set_view_width,_gta2_dev_camera,_gta2_port_set_activation_margin,_gta2_port_set_camera,_gta2_dev_teleport,_gta2_dev_find_road,_gta2_dev_find_open,_gta2_port_set_steer_target,_gta2_port_set_steer_params,_gta2_port_set_steer_ramp,_gta2_port_steer_debug,_gta2_port_set_camera_lead,_gta2_port_set_steer_grip,_gta2_port_set_throttle,_gta2_port_set_hud_inset,_gta2_port_map_state,_gta2_port_map_render_rows,_gta2_port_set_paused,_gta2_port_map_objects,_gta2_dev_object_models,_gta2_port_map_triggers,_gta2_port_map_gangs,_gta2_port_map_arrows,_gta2_port_set_hud_arrows,_gta2_port_sprite_rgba,_gta2_port_set_hud_edges,_gta2_dev_unlock_areas,_gta2_dev_set_respect,_gta2_dev_spawn_truck,_gta2_dev_truck_state,_gta2_port_set_interpolation,_gta2_dev_drawn_camera,_gta2_port_net_configure,_gta2_port_net_set_name,_gta2_port_net_receive,_gta2_port_net_peer_left,_gta2_port_net_set_map,_gta2_port_run_slice,_gta2_port_net_debug,_gta2_dev_sync_state,_gta2_dev_sync_history,_gta2_dev_sync_dump,_gta2_dev_sync_peds,_gta2_port_coop_players,_gta2_port_take_frame_ms,_gta2_port_set_friendly_fire,_gta2_port_net_set_rules,_gta2_port_set_player_team,_gta2_dev_test_friendly_fire,_gta2_dev_gang_respect,_gta2_port_set_ride_together,_gta2_dev_seat_player_driver,_gta2_dev_car_occupants,_gta2_dev_ride_check,_gta2_dev_ped_entry,_gta2_port_savestate_can_save,_gta2_port_savestate_prepare,_gta2_port_savestate_reserve,_gta2_port_savestate_restored,_gta2_port_savestate_label,_gta2_port_savestate_rules,_gta2_port_savestate_pay,_gta2_port_job_briefs,_gta2_port_reload_controls',
  ]
  
  

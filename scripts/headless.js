@@ -249,7 +249,7 @@ async function record(page, ms) {
     const M = window.gta2.Module; const t0 = performance.now();
     const f = () => {
       const s = window.gta2.map.last; const d = window.gtaMobile.readDev();
-      let dbg = null; try { const p = M.ccall('gta2_port_steer_debug', 'number', [], []); dbg = Array.from(M.HEAP32.subarray(p >> 2, (p >> 2) + 5)); } catch { /* older engine */ }
+      let dbg = null; try { const p = M.ccall('gta2_port_steer_debug', 'number', [], []); dbg = Array.from(M.HEAP32.subarray(p >> 2, (p >> 2) + 12)); } catch { /* older engine */ }
       const st = document.getElementById('gtaStick');
       window.__rec.push({ t: Math.round(performance.now() - t0), heading: +(s.heading * 180 / Math.PI).toFixed(1), x: +s.x.toFixed(3), y: +s.y.toFixed(3), speed: d ? +d.speed.toFixed(3) : 0,
         keys: Object.entries(held).filter(([, v]) => v).map(([k]) => k.replace('Key', '')).join(''), steer: dbg, gear: st && st.dataset.gear, mode: st && st.dataset.mode });
