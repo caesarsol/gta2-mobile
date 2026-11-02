@@ -161,12 +161,17 @@ html.gta-rotate #gtaReload {
   display: none;
   position: absolute;
   top: var(--pad-t);
-  left: calc(var(--pad-l) + 70px);
+  right: var(--pad-r);
+  flex-direction: column;
+  align-items: flex-end; /* right-aligned column: ✕, a pill-high gap, then the actions */
   gap: 6px;
   pointer-events: none;
 }
 #gtaMobile[data-screen='map'] #gtaMapBar {
   display: flex;
+}
+.gta-mapbar-gap {
+  height: 40px;
 }
 
 /* ---- Bottom-left: fixed joystick ----

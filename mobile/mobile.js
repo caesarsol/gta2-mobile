@@ -99,6 +99,7 @@
     map: svg('M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z'),
     reload: svg('M17.65 6.35A7.96 7.96 0 0012 4a8 8 0 108 8h-2a6 6 0 11-1.76-4.24L13 11h7V4l-2.35 2.35z'),
     more: svg('M6 10a2 2 0 100 4 2 2 0 000-4zm12 0a2 2 0 100 4 2 2 0 000-4zm-6 0a2 2 0 100 4 2 2 0 000-4z'),
+    close: svg('M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'),
   };
   window.gtaIcons = ICONS;
 
@@ -133,7 +134,8 @@
     </div>
     <div id="gtaCar" hidden></div>
     <div id="gtaMapBar">
-      <button type="button" class="gta-pill is-on" data-tap="KeyM" aria-label="Close map (M)">${ICONS.map}</button>
+      <button type="button" class="gta-pill" data-tap="KeyM" aria-label="Close map (M)">${ICONS.close}</button>
+      <div class="gta-mapbar-gap"></div>
       <button type="button" class="gta-pill" data-tap="KeyE" aria-label="Zoom in">+</button>
       <button type="button" class="gta-pill" data-tap="KeyQ" aria-label="Zoom out">−</button>
       <button type="button" class="gta-pill" data-tap="Space" aria-label="Centre on you">You</button>
