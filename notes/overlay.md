@@ -20,7 +20,10 @@ Design decisions and mechanics of `mobile.js` / `mobile.css` / `autostart.js` / 
   **Throttle**: the distance between the dead zone and `throttleFull` (110 px; 0 = off) caps the
   engine's gas pedal in proportion (`setThrottle` → `gta2_port_set_throttle`, 0..256; 256 whenever
   the stick is idle / released / on foot). The pedal is a 3:1 range of engine force, not of
-  speed (`notes/engine.md`, Cars).
+  speed (`notes/engine.md`, Cars). Shown on the stick: a dotted yellow ring at `throttleFull`
+  and a **throttle fan**, a 28° wedge from the centre toward the thumb as long as the gas it
+  gives (`.gta-throttle-fan`, a conic gradient sized in `updateStick`; CSS conic angles are
+  clockwise from up = `atan2(dx, −dy)`). Both only in a car with the feature on.
 - Rejected / removed: a JS-side predictive release for cars (replaced by the engine override),
   damping code (the user asked to remove it).
 

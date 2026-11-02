@@ -221,6 +221,30 @@ html.gta-rotate #gtaReload {
 #gtaMobile[data-mode='menu'] .gta-ring-aim {
   display: none;
 }
+/* In a car: the dotted throttle ring (Tune throttleFull = full gas) and the throttle fan, a wedge
+   from the centre toward the thumb as long as the gas it gives (mobile.js updateStick).
+   Both only while the feature is on (data-throttle='1'); the fan only while the stick is out. */
+.gta-ring-throttle,
+.gta-throttle-fan {
+  display: none;
+}
+#gtaStick[data-vehicle='1'][data-throttle='1'] .gta-ring-throttle {
+  display: block;
+  border-style: dotted;
+  border-color: rgba(255, 196, 0, 0.6);
+}
+#gtaStick[data-vehicle='1'][data-throttle='1'][data-gear='aim'] .gta-throttle-fan,
+#gtaStick[data-vehicle='1'][data-throttle='1'][data-gear='move'] .gta-throttle-fan {
+  display: block;
+}
+.gta-throttle-fan {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
 /* Knob turns white while aiming (turning on the spot, no walking) */
 #gtaStick[data-mode='aim'] #gtaStickKnob {
   background: rgba(255, 255, 255, 0.9);

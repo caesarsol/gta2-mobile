@@ -114,6 +114,8 @@
   root.innerHTML = `
     <div id="gtaStick">
       <div class="gta-ring gta-ring-aim"></div>
+      <div class="gta-ring gta-ring-throttle"></div>
+      <div class="gta-throttle-fan"></div>
       <div class="gta-ring gta-ring-move"></div>
       <div id="gtaHeading">
         <div class="gta-rev-sector"></div>
@@ -364,6 +366,7 @@
   const zone = root.querySelector('#gtaStickZone');
   const stick = root.querySelector('#gtaStick');
   const knob = root.querySelector('#gtaStickKnob');
+  const fan = stick.querySelector('.gta-throttle-fan');
 
   let stickId = null;
   let cx = 0, cy = 0;
@@ -505,8 +508,7 @@
     setSteerTarget(Math.round((((target % TAU) + TAU) % TAU) / TAU * 1440) % 1440);
     // The stick distance is the gas pedal: the engine's analog pedal is capped in proportion
     // between the dead zone and throttleFull (engine patch 0028); 0 = always full.
-    const span = T.throttleFull - T.ringMove;
-    setThrottle(span > 0 ? Math.round(256 * Math.min(1, Math.max(0, (stickDist - T.ringMove) / span))) : 256);
+    setThrottle(Math.round(256 * throttleFrac(stickDist)));
     setHeld('KeyW', !reversing);
     setHeld('KeyS', reversing);
     stick.dataset.mode = reversing ? 'rev' : 'fwd';
@@ -544,6 +546,12 @@
     if (!g || !g.Module) return;
     try { g.Module.ccall('gta2_port_set_steer_target', null, ['number'], [units]); steerSent = units; } catch { /* older engine */ }
   }
+  // Gas fraction for a stick distance: 0 at the dead zone, 1 at throttleFull (1 everywhere when
+  // throttleFull is 0 or inside the dead zone = the feature is off).
+  function throttleFrac(dist) {
+    const span = T.throttleFull - T.ringMove;
+    return span > 0 ? Math.min(1, Math.max(0, (dist - T.ringMove) / span)) : 1;
+  }
   // The gas pedal cap (0..256 of the full pedal; 256 = no cap). Sent only on change.
   let throttleSent = 256;
   function setThrottle(t) {
@@ -564,6 +572,14 @@
     stickDx = dx;
     stickDy = dy;
     stickDist = dist;
+    // Throttle fan (cars): a wedge from the centre toward the thumb, as long as the gas it gives
+    // (dead zone → throttleFull ring). CSS conic angles are clockwise from up.
+    if (dist > 0) {
+      const len = T.ringMove + throttleFrac(dist) * Math.max(0, T.throttleFull - T.ringMove);
+      const ang = (Math.atan2(dx, -dy) * 180) / Math.PI;
+      fan.style.width = fan.style.height = `${Math.round(len * 2)}px`;
+      fan.style.background = `conic-gradient(from ${(ang - 14).toFixed(1)}deg, rgba(255, 196, 0, 0.45) 0 28deg, transparent 28deg 360deg)`;
+    }
     if (dist > KNOB_MAX) {
       dx = (dx / dist) * KNOB_MAX;
       dy = (dy / dist) * KNOB_MAX;
@@ -593,6 +609,9 @@
     move.style.width = move.style.height = `${T.ringMove * 2}px`;
     const aim = root.querySelector('.gta-ring-aim');
     aim.style.width = aim.style.height = `${T.ringAim * 2}px`;
+    const thr = root.querySelector('.gta-ring-throttle');
+    thr.style.width = thr.style.height = `${T.throttleFull * 2}px`;
+    stick.dataset.throttle = T.throttleFull > T.ringMove ? '1' : '0';
     const a = root.querySelector('.gta-rev-line-a');
     const b = root.querySelector('.gta-rev-line-b');
     const sec = root.querySelector('.gta-rev-sector');
