@@ -110,6 +110,17 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   handling data's skid thresholds no longer matter. Applied whether or not a steering target is
   set (a coasting car would slide otherwise). Side effects accepted: a sideways push (another
   car, an explosion) is cancelled the next tick, so the car cannot be shoved sideways.
+- **Jitter a few degrees off a road's axis (measured 2026-11-02, Z-Type on the long road, stick
+  at axis + 5°, Tune defaults and grip 0 alike)**: the car never holds 5°; it sits at 0.8–2°
+  and the heading cycles 0.8 → 2 → 1.3 → 1 → 0.8 every 4 frames (~5 Hz, ±1°), one 1/3-lock
+  jab per cycle (`steer_debug` key 1 / scale ~85 one frame in four). Driving at 5° across the
+  road reaches the kerb within ~2 s, and the map-edge collision response realigns a scraping
+  car to the wall's axis (see "Steering jitter: root cause"): the override jabs it back toward
+  the target, the kerb pulls it to 0 again. Control: the same car spawned 5° off the axis with W
+  held and no steering target (`VARIANTS=wkey`) ends at heading exactly 0.0, no jabs, scraping
+  at speed 0.08. So the jitter is the override fighting the kerb, not a limit cycle of its own
+  (in free space it settles, see above). With grip 100 the velocity follows every jab, so the
+  lateral position (and the pinned camera) jitters too; with grip 0 only the sprite's heading.
 - The overlay shows `Car <model>` under the weapon pills while driving (model = handling index).
 
 ## Camera
