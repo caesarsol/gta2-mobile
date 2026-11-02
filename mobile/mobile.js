@@ -269,6 +269,12 @@
       help: 'Cars only. If the stick points more than this behind the car, you reverse toward it instead of U-turning. Drawn as the dashed red sector.' },
     { k: 'revExit', label: 'Reverse · exit (°)', def: 100, step: 5, min: 60, max: 180,
       help: 'Leave reverse when the stick comes back within this angle. Keep it below "Reverse · enter" (hysteresis).' },
+    { k: 'camLock', label: 'Camera · fixed height', def: 1, step: 1, min: 0, max: 1,
+      help: 'GTA1-style camera: the height no longer rises and falls with speed. 1 = on (the heights below), 0 = the port\'s own camera.' },
+    { k: 'camFoot', label: 'Camera · on foot (blocks)', def: 2, step: 0.5, min: 1, max: 8,
+      help: 'Camera height on foot when the fixed camera is on. The game\'s own is 1.' },
+    { k: 'camCar', label: 'Camera · in a car (blocks)', def: 4, step: 0.5, min: 1, max: 10,
+      help: 'Camera height in a car: a bit higher = you see further. Above ~5 the game\'s camera cannot be held down at speed (its offset is limited to ±2…4 blocks).' },
     { k: 'rotate', label: 'Portrait lock · rotate', def: 1, step: 1, min: -1, max: 1,
       help: 'Phone locked in portrait? The page is turned to landscape anyway: 1 = hold it with the notch on the left, −1 = notch on the right, 0 = off (follow the phone).' },
   ];
@@ -582,9 +588,45 @@
     renderTune();
   });
 
+  // ---------- Fixed camera height (GTA1 style) ----------
+  // The engine raises the camera with speed (car height + raw speed, up to 14 blocks) and the
+  // port's Modern camera only smooths that. The port exposes a height *bias* added to the drawn
+  // height (gta2_port_set_camera(1, bias), clamped to −2…+4) and map.last.camZ reports the
+  // drawn height, so a per-frame loop can hold the drawn height at a target: bias = target −
+  // (drawn − current bias). Beyond the clamp (very fast cars) the height still drifts a little.
+  // The target eases between the on-foot and in-car values.
+  let camBias = 0;
+  let camTarget = null;
+  let camLocked = false;
+  function camTick() {
+    const g = G();
+    const s = live();
+    if (!g || !g.Module || root.hidden || !s || !s.hasPlayer) return;
+    if (!T.camLock) {
+      if (camLocked) {
+        // back to the shell's own camera: its stored mode and view distance (shell.js wireCameraButton)
+        camLocked = false; camTarget = null; camBias = 0;
+        let modern = true, view = 0;
+        try { modern = localStorage.getItem('gta2-port-camera') !== 'classic'; view = Math.max(0, Math.min(3, Number(localStorage.getItem('gta2-port-view-distance')) || 0)); } catch { /* ignore */ }
+        try { g.Module.ccall('gta2_port_set_camera', null, ['number', 'number'], [modern ? 1 : 0, [0, 1.5, 3, 4][view]]); } catch { /* ignore */ }
+      }
+      return;
+    }
+    const want = s.inCar ? T.camCar : T.camFoot;
+    camTarget = camTarget === null ? want : camTarget + (want - camTarget) * 0.08;
+    const filtered = s.camZ - camBias; // the port's smoothed canonical height
+    const bias = Math.max(-2, Math.min(4, camTarget - filtered));
+    if (!camLocked || Math.abs(bias - camBias) > 0.005) {
+      camBias = bias;
+      camLocked = true;
+      try { g.Module.ccall('gta2_port_set_camera', null, ['number', 'number'], [1, camBias]); } catch { /* ignore */ }
+    }
+  }
+
   (function loop() {
     stickTick();
     updateHeadingIndicator();
+    camTick();
     requestAnimationFrame(loop);
   })();
 

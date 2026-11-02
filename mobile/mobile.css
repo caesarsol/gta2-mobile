@@ -37,6 +37,12 @@ html.gta-touch.gta-tools-on body:not(.landing-on) #tools:not([hidden]) {
   z-index: 1001;
   bottom: max(8px, env(safe-area-inset-bottom));
 }
+/* The toolbar's Camera (Modern / Classic) and View distance buttons: our fixed camera drives
+   the same engine setting, so they are hidden on touch (Tune panel instead). */
+html.gta-touch #tools #camera,
+html.gta-touch #tools #view-distance {
+  display: none;
+}
 html.gta-touch.gta-tools-on body:not(.landing-on) #tools button,
 html.gta-touch.gta-tools-on body:not(.landing-on) #tools label {
   font-size: 14px;
