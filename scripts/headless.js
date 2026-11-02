@@ -93,6 +93,22 @@ async function startGame(page, url = DEFAULT_URL, timeoutMs = 15 * 60 * 1000) {
     if (st.status && st.status !== lastStatus) { lastStatus = st.status; console.log('[status]', st.status.trim().slice(0, 120)); }
   }
   await page.waitForTimeout(1000);
+  // After a fresh unpack the game starts from memory while the 60 MB IndexedDB write is still
+  // in flight; closing the browser before the 'complete' marker lands means downloading again
+  // next time. Wait for it (up to 90 s) whenever this run downloaded.
+  if (/Downloading|Unpacking/.test(lastStatus)) {
+    const t1 = Date.now();
+    while (Date.now() - t1 < 90000) {
+      const done = await page.evaluate(() => new Promise((res) => {
+        const r = indexedDB.open('gta2-port-gamefiles', 1);
+        r.onerror = () => res(false);
+        r.onsuccess = () => { const db = r.result; try { const g = db.transaction('meta', 'readonly').objectStore('meta').get('complete'); g.onsuccess = () => { db.close(); res(!!g.result); }; g.onerror = () => { db.close(); res(false); }; } catch { db.close(); res(false); } };
+      }));
+      if (done) break;
+      await page.waitForTimeout(1000);
+    }
+    console.log('[headless] game files stored in', Math.round((Date.now() - t1) / 1000), 's');
+  }
 }
 
 // cleanSaves + startGame: what every measurement probe should call.
@@ -123,12 +139,44 @@ const findRoad = (page) => ints(page, 'gta2_dev_find_road', 5);
 // Teleport and wait for the camera to arrive (it pans at a limited speed, up to ~30 s): camera
 // measurements, and the camera-relative lead, are meaningless before that.
 async function teleport(page, x, y, waitCamera = true) {
-  await ccall(page, 'gta2_dev_teleport', 'number', ['number', 'number'], [x, y]);
-  if (!waitCamera) { await page.waitForTimeout(1500); return; }
+  // the hook moves the ped only: a seated ped stays in its car, so get out first
+  const s = await state(page);
+  if (s.devInCar || s.inCar) {
+    const key = (type, code, k = code.replace(/^Key/, '').toLowerCase()) => page.evaluate(([t, c, kk]) => window.dispatchEvent(new KeyboardEvent(t, { code: c, key: kk, bubbles: true })), [type, code, k]);
+    await exitCar({ page, key, tapKey: async (code, ms = 150) => { await key('keydown', code); await page.waitForTimeout(ms); await key('keyup', code); } });
+  }
+  let ok = 0;
+  for (let i = 0; i < 5 && !ok; i++) {
+    ok = await ccall(page, 'gta2_dev_teleport', 'number', ['number', 'number'], [x, y]); // 0 = refused (ped still seated)
+    if (!ok) await page.waitForTimeout(700);
+  }
+  if (!ok) { console.warn('[headless] teleport refused: the ped is still in a car'); return false; }
+  if (!waitCamera) { await page.waitForTimeout(1500); return true; }
   const camDist = () => page.evaluate(() => { const s = window.gta2.map.last; return Math.hypot(s.x - s.camX, s.y - s.camY); });
   const t0 = Date.now();
   while ((await camDist()) > 0.3 && Date.now() - t0 < 45000) await page.waitForTimeout(300);
   await page.waitForTimeout(800);
+  return true;
+}
+
+// Gets out of the current car, if any: Enter is ignored while the car still rolls, so brake
+// first (handbrake), then press Enter until the dev state agrees. Teleporting or spawning while
+// still seated wedges the new car against the old one (nothing moves afterwards).
+async function exitCar(h) {
+  let s = await state(h.page);
+  if (!s.devInCar && !s.inCar) return true;
+  for (let i = 0; i < 30 && s.speed > 0.01; i++) { await h.key('keydown', 'Space'); await h.page.waitForTimeout(100); s = await state(h.page); }
+  await h.key('keyup', 'Space');
+  for (let tries = 0; tries < 4; tries++) {
+    await h.tapKey('Enter');
+    for (let i = 0; i < 10; i++) {
+      await h.page.waitForTimeout(300);
+      s = await state(h.page);
+      // during the exit animation the ped briefly is not the player (hasPlayer false): wait for a real reading
+      if (s.hasPlayer && !s.devInCar && !s.inCar) { await h.page.waitForTimeout(500); return true; }
+    }
+  }
+  return false;
 }
 
 // Spawns a car next to the player (dev hook) and gets in with Enter. The walk to the door and
@@ -136,7 +184,7 @@ async function teleport(page, x, y, waitCamera = true) {
 // dev state only when the ped is really inside: wait for both. Model 10 is a plain car, 25 is
 // fast, 20 cannot be entered. Spawn on a fresh spot: a car on top of another one fails.
 async function enterCar(h, model = 10, dx = 0, dy = 2, rot = 0) {
-  if ((await state(h.page)).devInCar) { await h.tapKey('Enter'); await h.page.waitForTimeout(2000); }
+  if (!(await exitCar(h))) return false;
   await ccall(h.page, 'gta2_dev_spawn_car', 'number', ['number', 'number', 'number', 'number'], [model, dx, dy, rot]);
   await h.page.waitForTimeout(500);
   await h.tapKey('Enter');
@@ -170,7 +218,7 @@ async function record(page, ms) {
   return { rows: () => page.evaluate(() => window.__rec) };
 }
 
-module.exports = { DEFAULT_URL, PROFILE_DIR, launch, cleanSaves, startGame, startClean, state, ccall, ints, findOpen, findRoad, teleport, enterCar, record };
+module.exports = { DEFAULT_URL, PROFILE_DIR, launch, cleanSaves, startGame, startClean, state, ccall, ints, findOpen, findRoad, teleport, exitCar, enterCar, record };
 
 if (require.main === module) {
   (async () => {
