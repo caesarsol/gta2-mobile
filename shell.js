@@ -41,6 +41,7 @@ registerDict({
     'shell.viewFarthest': 'Farthest',
     'shell.cameraModern': 'Camera: Modern',
     'shell.cameraClassic': 'Camera: Classic',
+    'shell.cameraMobile': 'Camera: Mobile',
     'shell.viewLabel': 'View: {view}',
     'shell.viewTitle': 'How much of the city you see (− / = keys)',
     'shell.viewTitleDisabled': 'View distance needs the Modern camera',
@@ -155,6 +156,7 @@ registerDict({
     'shell.viewFarthest': 'Lo más lejos',
     'shell.cameraModern': 'Cámara: moderna',
     'shell.cameraClassic': 'Cámara: clásica',
+    'shell.cameraMobile': 'Cámara: móvil',
     'shell.viewLabel': 'Vista: {view}',
     'shell.viewTitle': 'Cuánta ciudad ves (teclas − / =)',
     'shell.viewTitleDisabled': 'La distancia de vista necesita la cámara moderna',
@@ -269,6 +271,7 @@ registerDict({
     'shell.viewFarthest': 'Le plus loin',
     'shell.cameraModern': 'Caméra : Moderne',
     'shell.cameraClassic': 'Caméra : Classique',
+    'shell.cameraMobile': 'Caméra : mobile',
     'shell.viewLabel': 'Vue : {view}',
     'shell.viewTitle': 'Combien de ville vous voyez (touches − / =)',
     'shell.viewTitleDisabled': 'La distance de vue demande la caméra moderne',
@@ -598,14 +601,18 @@ function wireCameraButton(Module) {
   try { view = Math.max(0, Math.min(3, Number(localStorage.getItem(VIEW_KEY)) || 0)); } catch { /* storage unavailable */ }
   let bias = HEIGHTS[view];
   if (params.has('heightbias')) bias = Number(params.get('heightbias')) || 0;
+  // Three cameras: 'modern' (smoothed height), 'mobile' (Modern, and centred on the car: no lead,
+  // no height from speed; engine patch 0026) and 'classic' (the original). The button cycles them.
+  const MODES = ['modern', 'mobile', 'classic'];
   let mode = params.get('camera');
-  if (mode !== 'classic' && mode !== 'modern') {
+  if (!MODES.includes(mode)) {
     try { mode = localStorage.getItem(CAMERA_KEY); } catch { /* storage unavailable */ }
   }
-  let modern = mode !== 'classic';
+  if (!MODES.includes(mode)) mode = 'modern';
   const apply = () => {
-    Module.ccall('gta2_port_set_camera', null, ['number', 'number'], [modern ? 1 : 0, bias]);
-    button.textContent = modern ? t('shell.cameraModern') : t('shell.cameraClassic');
+    const modern = mode !== 'classic';
+    Module.ccall('gta2_port_set_camera', null, ['number', 'number'], [mode === 'classic' ? 0 : mode === 'mobile' ? 2 : 1, bias]);
+    button.textContent = t(mode === 'classic' ? 'shell.cameraClassic' : mode === 'mobile' ? 'shell.cameraMobile' : 'shell.cameraModern');
     viewButton.textContent = t('shell.viewLabel', { view: t(VIEW_KEYS[view]) });
     viewButton.disabled = !modern;
     viewButton.title = modern ? t('shell.viewTitle') : t('shell.viewTitleDisabled');
@@ -620,7 +627,7 @@ function wireCameraButton(Module) {
   // − and = while playing (unused by the game): view distance out / in.
   viewKeys.handle = (e, down) => {
     if (e.code !== 'Minus' && e.code !== 'Equal') return false;
-    if (down && !e.repeat && modern) {
+    if (down && !e.repeat && mode !== 'classic') {
       setView(view + (e.code === 'Minus' ? 1 : -1));
       setStatus(t('shell.viewLabel', { view: t(VIEW_KEYS[view]) }));
       clearTimeout(viewKeys.timer);
@@ -629,8 +636,8 @@ function wireCameraButton(Module) {
     return true;
   };
   button.addEventListener('click', () => {
-    modern = !modern;
-    try { localStorage.setItem(CAMERA_KEY, modern ? 'modern' : 'classic'); } catch { /* storage unavailable */ }
+    mode = MODES[(MODES.indexOf(mode) + 1) % MODES.length];
+    try { localStorage.setItem(CAMERA_KEY, mode); } catch { /* storage unavailable */ }
     apply();
     $('screen').focus();
   });
