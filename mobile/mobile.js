@@ -747,11 +747,14 @@
   // ---------- Weapon pill (top-right) ----------
   // GTA2 has no direct weapon selection, only previous / next (J / K): the pill
   // shows the current weapon and its ammo, flanked by ◀ ▶.
-  // Weapon idx (gta2_dev_state): −1 fists, 1 pistol, 2 machine gun, … in the pickup order of
-  // map.js WEAPONS (verified: idx 1 draws the pistol on the HUD). Ammo is 10× the HUD count.
-  // Short names: the pill shares the top row with the bar and the HUD's weapon icon.
-  const WEAPON_NAMES = ['Fists', 'Pistol', 'MG', 'Rocket', 'Electro', 'Molotov', 'Grenade',
-    'Shotgun', 'Baton', 'Flame', 'Silenced', 'Dual'];
+  // Weapon idx (gta2_dev_state) = the engine's weapon_type enum (gta2_re enums.hpp): 0 pistol,
+  // 1 smg, 2 rocket, 3 shocker, 4 molotov, 5 grenade, 6 shotgun, 7 electro baton, 8 flamethrower,
+  // 9 silenced smg, 10 dual pistol, 15 car bomb, 16 oil, 17 car mines, 18 car smg, 19 tank gun,
+  // 20 fire truck gun, 21 fire truck flamethrower, 22 army jeep gun; −1 = fists. Ammo is 10×
+  // the HUD count. Short names: the pill shares the top row with the bar and the HUD icon.
+  const WEAPON_NAMES = ['Pistol', 'MG', 'Rocket', 'Electro', 'Molotov', 'Grenade', 'Shotgun', 'Baton',
+    'Flame', 'Silenced', 'Dual', 'Weapon 11', 'Weapon 12', 'Weapon 13', 'Weapon 14', 'Car bomb', 'Oil',
+    'Mines', 'Car MG', 'Tank gun', 'Water gun', 'Fire truck flame', 'Jeep gun'];
   const weaponsEl = root.querySelector('#gtaWeapons');
   const weaponEl = root.querySelector('#gtaWeapon');
   let weaponSig = '';
@@ -768,7 +771,7 @@
   }
   function syncWeapon(d) {
     const name = d ? (WEAPON_NAMES[d.weapon] || `Weapon ${d.weapon}`) : '';
-    const label = !d ? '' : d.weapon < 0 ? WEAPON_NAMES[0] : `${name} (${Math.round(d.ammo / 10)})`;
+    const label = !d ? '' : d.weapon < 0 ? 'Fists' : `${name} (${Math.round(d.ammo / 10)})`;
     const sig = `${!!d}:${label}`;
     if (sig === weaponSig) return;
     weaponSig = sig;
