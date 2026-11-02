@@ -124,9 +124,12 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   and the map measure canvases with `getBoundingClientRect()` **every frame**: on a rotated
   element that box has its sides swapped, so the game canvases get an instance override that
   returns the layout size. Stick deltas are rotated into the page frame; safe-area insets are
-  physical and get remapped. Known limit: taps on the shell's map screen (waypoints) are not
-  remapped. Tune `rotate`: 1 notch-left (default), −1 notch-right, 0 off. Headless:
-  `VIEWPORT=390x844`.
+  physical and get remapped. Pointer events aimed at the shell's map canvas (`#map-screen`)
+  are intercepted on `window` in the capture phase and re-dispatched with page-frame
+  coordinates (inverse of the body transform), so waypoints and drags land right (verified:
+  tap at page centre + 150 px → waypoint exactly 150 / scale blocks east). Our panels size in
+  `%` of `#gtaMobile`, never `vw`/`vh` (those are screen axes). Tune `rotate`: 1 notch-left
+  (default), −1 notch-right, 0 off. Headless: `VIEWPORT=390x844`.
 - **Camera**: the engine raises the camera with speed (car height + raw speed; drawn height 1
   on foot, ~4.7 at speed 0.22, up to 14) and the port's Modern camera only smooths it
   (`port_modern_camera.cpp`). `gta2_port_set_camera(mode, bias)` adds `bias` (clamped −2…+4)
