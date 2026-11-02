@@ -28,6 +28,8 @@
     if (!location.search.includes('touch')) return;
   }
   document.documentElement.classList.add('gta-touch');
+  // Our own URL (with boot.js's ?v=): sibling files load from here, with the same cache buster.
+  const SELF_URL = (document.currentScript && document.currentScript.src) || new URL('mobile/mobile.js', location.href).href;
 
   // Phones: fill the window instead of letterboxing to 16:9 (the shell reads this at start).
   try {
@@ -102,6 +104,7 @@
     more: svg('M6 10a2 2 0 100 4 2 2 0 000-4zm12 0a2 2 0 100 4 2 2 0 000-4zm-6 0a2 2 0 100 4 2 2 0 000-4z'),
     close: svg('M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'),
     upgrade: svg('M16 18v2H8v-2h8zM11 7.99V16h2V7.99h3L12 4 8 7.99h3z'),
+    chart: svg('M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z'),
   };
   window.gtaIcons = ICONS;
 
@@ -133,6 +136,7 @@
       <button type="button" class="gta-pill" id="gtaFullscreen" aria-label="Fullscreen">${ICONS.fullscreen}</button>
       <button type="button" class="gta-pill" id="gtaSound" aria-label="Sound on/off">${ICONS.soundOff}</button>
       <button type="button" class="gta-pill" id="gtaTune" aria-label="Tune controls">${ICONS.gear}</button>
+      <button type="button" class="gta-pill" id="gtaChartsBtn" aria-label="Driving charts on/off">${ICONS.chart}</button>
       <button type="button" class="gta-pill" id="gtaTools" aria-label="Game toolbar">${ICONS.more}</button>
       <button type="button" class="gta-pill gta-pill--primary" id="gtaLatest" aria-label="Back to the latest version" hidden>${ICONS.upgrade}</button>
     </div>
@@ -314,6 +318,8 @@
       help: 'Cars: every tick the car\'s velocity is turned onto its heading by this much. 100 = GTA1-style, the car never slides and goes exactly where it points, keeping its speed through turns. 0 = GTA2\'s own physics (skids at speed).' },
     { k: 'throttleFull', label: 'Throttle · full at (px)', def: 110, step: 10, min: 0, max: 130,
       help: 'Cars: the stick distance is the gas pedal. Between the dead zone and this radius the engine\'s pedal is capped in proportion (a little way out = gentle, this far = full). 0 = always full gas, as before.' },
+    { k: 'charts', label: 'Charts · show', def: 0, step: 1, min: 0, max: 1, bool: true,
+      help: 'Cars: live charts of the steering (error, yaw rate, lock, road assist) and grip (slip, lateral speed, speed, pedal, skid) over the last 8 s of motion; they freeze when you stop. Also the chart pill in the top bar.' },
     { k: 'revEnter', label: 'Reverse · enter (°)', def: 130, step: 5, min: 90, max: 180,
       help: 'Cars only. If the stick points more than this behind the car, you reverse toward it instead of U-turning. Drawn as the dashed red sector.' },
     { k: 'revExit', label: 'Reverse · exit (°)', def: 100, step: 5, min: 60, max: 180,
@@ -582,6 +588,7 @@
 
   // Ring size and reverse sector follow the tunables
   function applyTuneVisuals() {
+    root.querySelector('#gtaChartsBtn').classList.toggle('is-on', !!T.charts);
     const move = root.querySelector('.gta-ring-move');
     move.style.width = move.style.height = `${T.ringMove * 2}px`;
     const aim = root.querySelector('.gta-ring-aim');
@@ -680,6 +687,7 @@
     }
   }
   onTap(root.querySelector('#gtaTune'), () => { renderTune(); tunePanel.hidden = false; });
+  onTap(root.querySelector('#gtaChartsBtn'), () => { T.charts = T.charts ? 0 : 1; saveTune(); applyTuneVisuals(); });
   onTap(tunePanel.querySelector('.gta-tune-close'), () => { tunePanel.hidden = true; });
   onTap(tunePanel.querySelector('.gta-tune-reset'), () => {
     for (const d of TUNE_DEFS) T[d.k] = d.def;
@@ -731,10 +739,33 @@
     }
   }
 
+  // ---------- Driving charts (mobile/charts.js, loaded below with our own ?v=) ----------
+  // One sample per frame from gta2_port_steer_debug (12 ints, port/platform/steer_web.cpp):
+  // Ang16 units → degrees (÷4), Fix16 → blocks (÷16384), skid as a ratio to the threshold.
+  const chartsScript = document.createElement('script');
+  chartsScript.src = new URL('charts.js', SELF_URL).href + (SELF_URL.includes('?') ? SELF_URL.slice(SELF_URL.indexOf('?')) : '');
+  chartsScript.async = true;
+  document.head.appendChild(chartsScript);
+  function chartsTick() {
+    const C = window.gtaDrivingCharts;
+    if (!C) return;
+    const g = G();
+    const on = !!T.charts && !!g && !!g.Module && !root.hidden && !root.dataset.screen && !!devState && devState.inCar;
+    C.show(on, root);
+    if (!on) return;
+    let v;
+    try { const M = g.Module; const p = M.ccall('gta2_port_steer_debug', 'number', [], []); v = M.HEAP32.subarray(p >> 2, (p >> 2) + 12); } catch { return; }
+    C.push({
+      error: v[1] / 4, omega: v[2] / 4, lock: v[3] * v[4] / 256, assist: v[10] / 4, key: v[3],
+      slip: v[5] / 4, lat: v[6] / 16384, speed: v[7] / 16384, pedal: v[11] / 16384, skidF: v[8] / 256, skidR: v[9] / 256,
+    });
+  }
+
   (function loop() {
     stickTick();
     updateHeadingIndicator();
     camTick();
+    chartsTick();
     requestAnimationFrame(loop);
   })();
 

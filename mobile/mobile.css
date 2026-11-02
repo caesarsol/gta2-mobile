@@ -601,3 +601,30 @@ html.gta-touch #map-radar {
   top: max(8px, env(safe-area-inset-top));
   right: max(12px, env(safe-area-inset-right));
 }
+
+/* ---- Driving charts (mobile/charts.js): the middle band between the stick and the buttons,
+   under every control; the plot at 20 % opacity so it never hides the road, the labels brighter ---- */
+#gtaCharts {
+  position: absolute;
+  top: 16%;
+  right: calc(var(--pad-r) + 200px); /* clear of the round buttons */
+  bottom: 4%;
+  left: calc(var(--pad-l) + 290px); /* clear of the stick */
+  z-index: 0;
+  pointer-events: none;
+}
+#gtaCharts[hidden] {
+  display: none;
+}
+#gtaCharts canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+#gtaCharts .gta-charts-plot {
+  opacity: 0.2;
+}
+#gtaCharts .gta-charts-text {
+  opacity: 0.75;
+}

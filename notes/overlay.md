@@ -89,6 +89,20 @@ the midpoint pan are driven by us until all fingers lift.
 `gta2_port_set_hud_inset` (side padding → reference px) whenever a value changes. Details and
 measurements: `notes/engine.md`.
 
+## Driving charts (`mobile/charts.js`)
+
+Tune `charts` (boolean) or the chart pill in the top bar. `mobile.js` loads `charts.js` itself
+(from its own URL, with boot.js's `?v=`: boot.js's file list stays fixed) and pushes one sample
+per frame from `gta2_port_steer_debug` (12 ints) while in a car; `window.gtaDrivingCharts.show/push`.
+Design: the x axis is **time in motion** (advances only while speed > 0; the charts freeze when
+stopped and stay readable), last 8 s, "now" at the right. Two panels, `#gtaCharts` in the middle
+band (right of the stick, left of the buttons, under every control), the plot canvas at 20 %
+opacity, the label canvas (name + current value per series, right of each panel) at 75 %. Each
+series has its own scale (auto-range over the window with a floor, or fixed: lock ±1, pedal
+0..5). Panel "steer": error °, ω °/tick, lock = key × scale, snap = road assist °/tick; band =
+key held. Panel "grip": slip °, lateral b/t, speed b/t, pedal; bands = front / rear skid (wheel
+force ≥ the handling's threshold). Labels only, no probes needed to read it: drive and look.
+
 ## Sound
 
 Browsers start audio only inside a user gesture; iOS does not count a touch `pointerdown` and we
@@ -117,3 +131,10 @@ from muting Web Audio with the ringer switch.
 - The reload pill was once hidden under the weapon pills: the top row has three owners (HUD
   left, bar centre, weapon pills right) — check all three at 844×390 and 390×844.
 - `pointerdown` on the weapon ◀ ▶ while the pill hides (entering a car) must release the key.
+- **An element id is a window global** (named access): the chart pill `id="gtaCharts"` made
+  `window.gtaCharts` the button until charts.js assigned its module, and `C.show` threw inside
+  the first `loop()` call, which runs *before* `window.gtaMobile` is set (the probes then saw
+  a half-built overlay). Module globals get names no element uses (`gtaDrivingCharts`), and
+  the pill is `#gtaChartsBtn`.
+- The charts box must stay clear of the round buttons (right: safe area + 200 px) and the
+  stick (left: safe area + 290 px): checked on the 844×390 screenshot.
