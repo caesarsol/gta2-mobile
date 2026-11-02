@@ -2,7 +2,7 @@
 // through the lobby's transport as lobby messages, outside the game, so they
 // never affect the lockstep simulation.
 
-import { onLangChange, registerDict, t } from './strings.js?v=cb719b924b';
+import { onLangChange, registerDict, t } from './strings.js?v=d0544e5b4b';
 
 registerDict({
   en: {
