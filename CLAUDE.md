@@ -149,7 +149,11 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   `/home/user/m1stermo/gta2-browser/research/` (work dir `/home/user/m1stermo`). After a
   rebuild the root files are the build output: all `?v=` hashes change, the `index.html` hooks
   come back via `engine/patch-index.py`, the previous build goes under `old/<id>/` so existing
-  save states still open.
+  save states still open. **Save states are per build**: the Saves screen opens an older
+  save's build in `old/<id>/` (a new tab), so every archived page must carry the hook too, as
+  `../../mobile/boot.js` (`patch-index.py old/<id>/index.html`, run by build.sh); `boot.js`
+  resolves `mobile.css` / `mobile.js` / `autostart.js` from its own URL, so one `mobile/` at
+  the root serves them all.
 - **Mobile camera follow + look-ahead (patch 0028, `port/platform/mobile_camera_web.cpp`)**:
   the camera follows its target with a spring (`SmoothApproach`, `Camera_0xBC::Update_435FF0`)
   whose acceleration and top speed scale with the *simulated* height; mode 2 keeps that height
