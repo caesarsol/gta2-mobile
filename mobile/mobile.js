@@ -306,7 +306,7 @@
       help: 'Cars: how many game ticks of yaw momentum the engine-side steering anticipates before letting go. Higher = earlier release, less overshoot; too high = slow turns.' },
     { k: 'steerBand', label: 'Steer · dead band (°)', def: 1.5, step: 0.5, min: 0.5, max: 10,
       help: 'Cars: stop steering within this angle of the stick direction; it starts again beyond twice it.' },
-    { k: 'steerRamp', label: 'Steer · soft zone (°)', def: 20, step: 5, min: 0, max: 90,
+    { k: 'steerRamp', label: 'Steer · soft zone (°)', def: 30, step: 5, min: 0, max: 90, oldDefs: [20],
       help: 'Cars: GTA2 steers at full lock only, which slides at speed. Within this angle of the target the steering key is pulsed in proportion to the remaining error (like tapping), beyond it full lock. 0 = always full lock (jabs and slides, settles fastest).' },
     { k: 'revEnter', label: 'Reverse · enter (°)', def: 130, step: 5, min: 90, max: 180,
       help: 'Cars only. If the stick points more than this behind the car, you reverse toward it instead of U-turning. Drawn as the dashed red sector.' },
@@ -327,7 +327,9 @@
   function loadTune() {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(TUNE_KEY) || '{}') || {}; } catch { saved = {}; }
-    for (const d of TUNE_DEFS) T[d.k] = typeof saved[d.k] === 'number' ? saved[d.k] : d.def;
+    // saveTune stores every value, so a saved copy of a former default is not a user choice: a
+    // changed default (listed in oldDefs) replaces it.
+    for (const d of TUNE_DEFS) T[d.k] = typeof saved[d.k] === 'number' && !(d.oldDefs || []).includes(saved[d.k]) ? saved[d.k] : d.def;
   }
   function saveTune() {
     try { localStorage.setItem(TUNE_KEY, JSON.stringify(T)); } catch { /* ignore */ }
