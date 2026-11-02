@@ -668,8 +668,9 @@
   let rotation = 0;
   const portraitMq = matchMedia('(orientation: portrait)');
   const layoutRect = function () {
-    const w = this.clientWidth, h = this.clientHeight;
-    return { x: 0, y: 0, left: 0, top: 0, width: w, height: h, right: w, bottom: h, toJSON() { return this; } };
+    // layout box in the page frame (the map canvas is inset from the left for the notch)
+    const w = this.clientWidth, h = this.clientHeight, l = this.offsetLeft, t = this.offsetTop;
+    return { x: l, y: t, left: l, top: t, width: w, height: h, right: l + w, bottom: t + h, toJSON() { return this; } };
   };
   function patchCanvasRects(on) {
     for (const id of ['screen', 'map-screen', 'map-overlay', 'map-radar']) {

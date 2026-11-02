@@ -24,6 +24,22 @@ html.gta-touch :not(input):not(textarea):not(select) {
 html.gta-touch canvas {
   touch-action: none;
 }
+/* The shell's map screen draws its legend at the canvas' left edge, under the notch when the
+   phone is held notch-left: start the canvas 20 px in (or the safe area, if larger). The
+   insets are physical, so the rotated page picks the matching side. */
+html.gta-touch #map-screen {
+  left: max(20px, env(safe-area-inset-left)) !important;
+  width: calc(100% - max(20px, env(safe-area-inset-left))) !important;
+}
+html.gta-touch.gta-rotate-cw #map-screen {
+  left: max(20px, env(safe-area-inset-top)) !important;
+  width: calc(100% - max(20px, env(safe-area-inset-top))) !important;
+}
+html.gta-touch.gta-rotate-ccw #map-screen {
+  left: max(20px, env(safe-area-inset-bottom)) !important;
+  width: calc(100% - max(20px, env(safe-area-inset-bottom))) !important;
+}
+
 /* The shell's desktop toolbar, status line and FPS counter: the pills replace them on touch.
    The ⋯ pill brings the toolbar back (above the overlay, fully opaque). */
 html.gta-touch body:not(.landing-on) #tools,
