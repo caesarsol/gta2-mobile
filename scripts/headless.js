@@ -5,13 +5,14 @@
  *   node scripts/headless.js [url]   → smoke test: start, read the live state, turn, drive
  *   const h = require('./scripts/headless'); → reuse helpers in ad-hoc probes
  *
- * Serve the repo root first:
- *   python3 -m http.server 8124 --bind 127.0.0.1
+ * Before a run: `source <(scripts/dev-servers.sh /path/to/GTA2INSTALLER.exe)` starts the site
+ * server (127.0.0.1:8124) and the installer mirror, and exports INSTALLER_MIRROR. Read
+ * notes/testing.md first: probe hygiene (clean saves, where to drive, what to wait for).
  *
- * The browser profile persists in PROFILE_DIR, so the 346 MB installer is downloaded and
- * unpacked once (IndexedDB). With INSTALLER_MIRROR=<url> the archive.org installer request is
- * redirected (Playwright route → 302) to that URL, e.g. a local HTTP server with CORS headers
- * serving a GTA2INSTALLER.exe you already have, instead of the slow Internet Archive.
+ * The browser profile persists in PROFILE_DIR, so the 346 MB installer is unpacked once
+ * (IndexedDB, ~67 MB). With INSTALLER_MIRROR=<url> the archive.org installer request is
+ * redirected (Playwright route → 302) to that URL (scripts/installer-mirror.py) instead of the
+ * slow Internet Archive.
  */
 const path = require('path');
 const { chromium, devices } = require('playwright');
@@ -29,6 +30,8 @@ async function launch({ url = DEFAULT_URL } = {}) {
   if (process.env.INSTALLER_MIRROR) {
     await ctx.route('https://archive.org/cors/gta2_rockstar-classics/GTA2INSTALLER.exe', (route) =>
       route.fulfill({ status: 302, headers: { location: process.env.INSTALLER_MIRROR } }));
+  } else {
+    console.warn('[headless] INSTALLER_MIRROR is not set: a fresh profile downloads 346 MB from archive.org (slow). See scripts/dev-servers.sh');
   }
   const page = ctx.pages()[0] || (await ctx.newPage());
   page.on('pageerror', (e) => console.log('[pageerror]', e.message.slice(0, 300)));
@@ -45,7 +48,33 @@ async function launch({ url = DEFAULT_URL } = {}) {
   const key = (type, code, k = code.replace(/^Key/, '').toLowerCase()) =>
     page.evaluate(([t, c, kk]) => window.dispatchEvent(new KeyboardEvent(t, { code: c, key: kk, bubbles: true })), [type, code, k]);
   const hold = async (code, ms) => { await key('keydown', code); await page.waitForTimeout(ms); await key('keyup', code); };
-  return { browser: ctx.browser(), ctx, page, cdp, touch, tap, key, hold, url };
+  const tapKey = async (code, ms = 150) => hold(code, ms);
+  const h = { browser: ctx.browser(), ctx, page, cdp, touch, tap, key, hold, tapKey, url };
+  // Joystick: finger down at the stick centre, then stickAt(angle, radius) in *heading* terms
+  // (the car/ped heading the stick asks for; π = screen-up), stickUp() to release.
+  let stickCentre = null;
+  h.stickDown = async () => {
+    const zone = await page.$('#gtaStickZone'); const bb = await zone.boundingBox();
+    stickCentre = { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 };
+    await touch('touchStart', [{ x: stickCentre.x, y: stickCentre.y, id: 1 }]);
+  };
+  h.stickAt = async (heading, radius = 100) => {
+    if (!stickCentre) await h.stickDown();
+    const phi = heading - Math.PI / 2; // screen angle (CSS y down)
+    await touch('touchMove', [{ x: stickCentre.x + radius * Math.cos(phi), y: stickCentre.y - radius * Math.sin(phi), id: 1 }]);
+  };
+  h.stickUp = async () => { await touch('touchEnd', []); stickCentre = null; };
+  return h;
+}
+
+// Deletes the port's save states so autostart.js presses Play (a fresh area 1) instead of
+// Continue (the previous probe's world: its abandoned cars, its position). Call before startGame.
+async function cleanSaves(page, url = DEFAULT_URL) {
+  await page.goto(new URL('mobile/manifest.webmanifest', url).href, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  await page.evaluate(() => new Promise((res) => {
+    const r = indexedDB.deleteDatabase('gta2-port-states');
+    r.onsuccess = r.onerror = r.onblocked = () => res();
+  }));
 }
 
 // Navigate and wait until the player exists (autostart.js presses Play / Continue and skips the
@@ -66,36 +95,87 @@ async function startGame(page, url = DEFAULT_URL, timeoutMs = 15 * 60 * 1000) {
   await page.waitForTimeout(1000);
 }
 
+// cleanSaves + startGame: what every measurement probe should call.
+async function startClean(page, url = DEFAULT_URL) {
+  await cleanSaves(page, url);
+  await startGame(page, url);
+}
+
 function state(page) {
   return page.evaluate(() => {
     const g = window.gta2; const s = g.map.last; const d = window.gtaMobile ? window.gtaMobile.readDev() : null;
     return {
-      hasPlayer: !!(s && s.hasPlayer), inCar: !!(s && s.inCar), x: s ? +s.x.toFixed(2) : null, y: s ? +s.y.toFixed(2) : null,
-      heading: s ? +s.heading.toFixed(3) : null, speed: d ? +d.speed.toFixed(3) : null, weapon: d ? d.weapon : null, ammo: d ? d.ammo : null,
+      hasPlayer: !!(s && s.hasPlayer), inCar: !!(s && s.inCar), devInCar: !!(d && d.inCar), x: s ? +s.x.toFixed(2) : null, y: s ? +s.y.toFixed(2) : null,
+      heading: s ? +s.heading.toFixed(3) : null, speed: d ? +d.speed.toFixed(3) : null, carModel: d ? d.carModel : null, weapon: d ? d.weapon : null, ammo: d ? d.ammo : null,
       mode: window.gtaMobile ? window.gtaMobile.mode : null, overlayHidden: window.gtaMobile ? window.gtaMobile.root.hidden : null,
     };
   });
 }
 
-// Spawns a car next to the player (dev hook in the engine) and gets in with Enter: the walk to
-// the door and the animation take about 4.5 s. Model 10 is a plain car; 20 cannot be entered.
-async function enterCar(h, model = 10) {
-  await h.page.evaluate((m) => window.gta2.Module.ccall('gta2_dev_spawn_car', 'number', ['number', 'number', 'number', 'number'], [m, 1, 0, 0]), model);
+const ccall = (page, name, ret, types, args) => page.evaluate(([n, r, t, a]) => window.gta2.Module.ccall(n, r, t, a), [name, ret, types, args]);
+const ints = (page, name, n) => page.evaluate(([nm, k]) => { const M = window.gta2.Module; const p = M.ccall(nm, 'number', [], []); return Array.from(M.HEAP32.subarray(p >> 2, (p >> 2) + k)); }, [name, n]);
+
+// Dev hooks (port/platform/dev_hooks.cpp). Places: the largest open square (a park: [x, y, ?, size])
+// and the longest straight road ([x, y, ?, len, alongY]); both have traffic / peds around.
+const findOpen = (page) => ints(page, 'gta2_dev_find_open', 4);
+const findRoad = (page) => ints(page, 'gta2_dev_find_road', 5);
+
+// Teleport and wait for the camera to arrive (it pans at a limited speed, up to ~30 s): camera
+// measurements, and the camera-relative lead, are meaningless before that.
+async function teleport(page, x, y, waitCamera = true) {
+  await ccall(page, 'gta2_dev_teleport', 'number', ['number', 'number'], [x, y]);
+  if (!waitCamera) { await page.waitForTimeout(1500); return; }
+  const camDist = () => page.evaluate(() => { const s = window.gta2.map.last; return Math.hypot(s.x - s.camX, s.y - s.camY); });
+  const t0 = Date.now();
+  while ((await camDist()) > 0.3 && Date.now() - t0 < 45000) await page.waitForTimeout(300);
+  await page.waitForTimeout(800);
+}
+
+// Spawns a car next to the player (dev hook) and gets in with Enter. The walk to the door and
+// the animation take about 4.5 s; map.last.inCar turns true as soon as the walk starts, the
+// dev state only when the ped is really inside: wait for both. Model 10 is a plain car, 25 is
+// fast, 20 cannot be entered. Spawn on a fresh spot: a car on top of another one fails.
+async function enterCar(h, model = 10, dx = 0, dy = 2, rot = 0) {
+  if ((await state(h.page)).devInCar) { await h.tapKey('Enter'); await h.page.waitForTimeout(2000); }
+  await ccall(h.page, 'gta2_dev_spawn_car', 'number', ['number', 'number', 'number', 'number'], [model, dx, dy, rot]);
   await h.page.waitForTimeout(500);
-  await h.key('keydown', 'Enter', 'Enter'); await h.page.waitForTimeout(150); await h.key('keyup', 'Enter', 'Enter');
-  for (let i = 0; i < 20; i++) {
+  await h.tapKey('Enter');
+  for (let i = 0; i < 24; i++) {
     await h.page.waitForTimeout(500);
-    if ((await state(h.page)).inCar) return true;
+    const s = await state(h.page);
+    if (s.inCar && s.devInCar) { await h.page.waitForTimeout(500); return true; }
   }
   return false;
 }
 
-module.exports = { DEFAULT_URL, PROFILE_DIR, launch, startGame, state, enterCar };
+// Per-frame recorder (requestAnimationFrame): heading (deg), x, y, speed, held movement keys,
+// steer debug [active, error, omega, decision], stick gear/mode. start it, act, then rows().
+// Positions are map blocks; velocity direction = atan2(dx, dy) (forward = (sin a, cos a) there).
+async function record(page, ms) {
+  await page.evaluate((ms) => {
+    window.__rec = []; const held = {};
+    window.addEventListener('keydown', (e) => { held[e.code] = 1; }, true);
+    window.addEventListener('keyup', (e) => { held[e.code] = 0; }, true);
+    const M = window.gta2.Module; const t0 = performance.now();
+    const f = () => {
+      const s = window.gta2.map.last; const d = window.gtaMobile.readDev();
+      let dbg = null; try { const p = M.ccall('gta2_port_steer_debug', 'number', [], []); dbg = Array.from(M.HEAP32.subarray(p >> 2, (p >> 2) + 4)); } catch { /* older engine */ }
+      const st = document.getElementById('gtaStick');
+      window.__rec.push({ t: Math.round(performance.now() - t0), heading: +(s.heading * 180 / Math.PI).toFixed(1), x: +s.x.toFixed(3), y: +s.y.toFixed(3), speed: d ? +d.speed.toFixed(3) : 0,
+        keys: Object.entries(held).filter(([, v]) => v).map(([k]) => k.replace('Key', '')).join(''), steer: dbg, gear: st && st.dataset.gear, mode: st && st.dataset.mode });
+      if (performance.now() - t0 < ms) requestAnimationFrame(f);
+    };
+    requestAnimationFrame(f);
+  }, ms);
+  return { rows: () => page.evaluate(() => window.__rec) };
+}
+
+module.exports = { DEFAULT_URL, PROFILE_DIR, launch, cleanSaves, startGame, startClean, state, ccall, ints, findOpen, findRoad, teleport, enterCar, record };
 
 if (require.main === module) {
   (async () => {
     const h = await launch();
-    await startGame(h.page, process.argv[2] || DEFAULT_URL);
+    await startClean(h.page, process.argv[2] || DEFAULT_URL);
     const s0 = await state(h.page);
     console.log('spawn', JSON.stringify(s0));
     await h.hold('KeyA', 700);
@@ -105,7 +185,6 @@ if (require.main === module) {
     const s2 = await state(h.page);
     console.log('after W 1.5s', JSON.stringify(s2), 'Δx', +(s2.x - s1.x).toFixed(2), 'Δy', +(s2.y - s1.y).toFixed(2));
     console.log('entered car:', await enterCar(h));
-    const c0 = await state(h.page);
     await h.hold('KeyW', 1500);
     const c1 = await state(h.page);
     console.log('car after W 1.5s', JSON.stringify(c1), 'speed', c1.speed);
