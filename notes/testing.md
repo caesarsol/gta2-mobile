@@ -140,6 +140,11 @@ node scripts/headless.js                                        # smoke test: cl
   *a* page and a bare `curl` exits 0 on a 404. Now both `dev-servers.sh` and `launch()`
   verify the served `gta2.wasm` is this checkout's, and `launch()` refuses to run against
   anything else (see Setup). Lesson: a check that only tests "something answers" is no check.
+- **2026-11-02, `source <(scripts/dev-servers.sh …)` hung in the Bash tool** after printing all
+  its lines (both servers freshly started); the tool killed it after 30 min and the servers
+  died with it. Run plainly (`scripts/dev-servers.sh <exe>` returns in seconds, same servers)
+  and set `INSTALLER_MIRROR=http://127.0.0.1:8443/GTA2INSTALLER.exe` by hand. Cause not found
+  (the servers' stdout/stderr go to /dev/null; `launch()` starts the site server by itself anyway).
 - Car models for `h.enterCar(x, model)` are the handling index (`car_model_enum`,
   `Source/enums.hpp`): 10 BUICK (plain), 12 COPCAR (police), 25 HOTDOG_D2 (the fast one used
   in the steering measurements), 83 ZCX5 (the Zaibatsu Z-Type).
