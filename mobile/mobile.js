@@ -873,13 +873,17 @@
     carEl.hidden = !sig;
     carEl.textContent = sig;
   }
+  // In a car only a car weapon (idx ≥ 15: Ped::GetWeaponFromPed_46F110) can fire; the ped's own
+  // weapon is just carried along, so the pill (and Fire) go away in an unarmed car.
+  const canFire = (d) => !!d && (!d.inCar || d.weapon >= 15);
   function syncWeapon(d) {
-    const name = d ? (WEAPON_NAMES[d.weapon] || `Weapon ${d.weapon}`) : '';
-    const label = !d ? '' : d.weapon < 0 ? 'Fists' : `${name} (${Math.round(d.ammo / 10)})`;
-    const sig = `${!!d}:${label}`;
+    const show = canFire(d);
+    const name = show ? (WEAPON_NAMES[d.weapon] || `Weapon ${d.weapon}`) : '';
+    const label = !show ? '' : d.weapon < 0 ? 'Fists' : `${name} (${Math.round(d.ammo / 10)})`;
+    const sig = `${show}:${label}`;
     if (sig === weaponSig) return;
     weaponSig = sig;
-    weaponsEl.hidden = !d;
+    weaponsEl.hidden = !show;
     weaponEl.textContent = label;
   }
 
@@ -931,12 +935,14 @@
     const reloadEl = document.getElementById('gtaReload');
     if (reloadEl && reloadEl.parentElement !== topBar) { reloadEl.innerHTML = ICONS.reload; reloadEl.setAttribute('aria-label', 'Reload'); topBar.appendChild(reloadEl); }
     const inCar = !!(s && s.inCar);
-    const labels = `${mode}:${inCar}`;
+    const armed = mode === 'menu' || !devState || canFire(devState); // no Fire in an unarmed car
+    const labels = `${mode}:${inCar}:${armed}`;
     if (labels !== lastLabels) {
       lastLabels = labels;
       enterBtn.textContent = mode === 'menu' ? 'OK' : inCar ? 'Exit' : 'Enter';
       jumpBtn.textContent = mode === 'menu' ? 'Esc' : inCar ? 'Brake' : 'Jump';
-      fireBtn.hidden = mode === 'menu';
+      fireBtn.hidden = mode === 'menu' || !armed;
+      if (fireBtn.hidden && fireBtn.classList.contains('is-down')) { fireBtn.classList.remove('is-down'); release('KeyL'); }
     }
   }
   root.hidden = true;
