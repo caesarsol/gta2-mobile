@@ -329,12 +329,14 @@
   function loadTune() {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(TUNE_KEY) || '{}') || {}; } catch { saved = {}; }
-    // saveTune stores every value, so a saved copy of a former default is not a user choice: a
-    // changed default (listed in oldDefs) replaces it.
-    for (const d of TUNE_DEFS) T[d.k] = typeof saved[d.k] === 'number' && !(d.oldDefs || []).includes(saved[d.k]) ? saved[d.k] : d.def;
+    for (const d of TUNE_DEFS) T[d.k] = typeof saved[d.k] === 'number' ? saved[d.k] : d.def;
   }
+  // Only values that differ from their default are stored, so a changed default reaches
+  // everyone who did not touch that setting.
   function saveTune() {
-    try { localStorage.setItem(TUNE_KEY, JSON.stringify(T)); } catch { /* ignore */ }
+    const changed = {};
+    for (const d of TUNE_DEFS) if (T[d.k] !== d.def) changed[d.k] = T[d.k];
+    try { localStorage.setItem(TUNE_KEY, JSON.stringify(changed)); } catch { /* ignore */ }
   }
   loadTune();
   const KNOB_MAX = 130; // px: knob travel clamp (visual only)
@@ -356,7 +358,6 @@
   let stickId = null;
   let cx = 0, cy = 0;
   let stickDx = 0, stickDy = 0, stickDist = 0;
-  let turning = 0; // -1 = pressing right, 0 = none, +1 = pressing left
   let reversing = false;
   let walking = false; // on foot: W held (only once roughly facing the stick direction, with hysteresis)
   // On foot the ped turns fast (~12° per game tick at 30 Hz once it is turning) and the key
@@ -411,7 +412,6 @@
     if (stickDist < T.ringMove) {
       releaseHeld();
       setSteerTarget(-1);
-      turning = 0;
       reversing = false;
       walking = false;
       tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
@@ -472,7 +472,6 @@
           }
         }
       }
-      turning = 0;
       // Turn on the spot first, walk once roughly aligned (hysteresis: stop again beyond 2×). In
       // the aim ring (stick between the dead zone and ringAim) never walk: turn to aim and shoot.
       const aimOnly = stickDist < T.ringAim;
@@ -485,7 +484,7 @@
       return;
     }
 
-    // In a car the engine steers for us (engine patches 0027 + 0029, port/platform/steer_web.cpp):
+    // In a car the engine steers for us (engine patch 0027, port/platform/steer_web.cpp):
     // it gets the target heading and decides left / right and the wheel angle once per tick with
     // the exact heading and angular velocity, which a controller out here cannot do without
     // hunting (yaw momentum). We only hold the gas (or reverse).
@@ -554,7 +553,6 @@
     delete stick.dataset.gear;
     delete stick.dataset.mode;
     knob.style.transform = '';
-    turning = 0;
     reversing = false;
     walking = false;
     tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
