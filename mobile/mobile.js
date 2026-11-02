@@ -28,7 +28,11 @@
   document.documentElement.classList.add('gta-touch');
 
   // Phones: fill the window instead of letterboxing to 16:9 (the shell reads this at start).
-  try { if (localStorage.getItem('gta2-port-aspect') === null) localStorage.setItem('gta2-port-aspect', 'auto'); } catch { /* ignore */ }
+  try {
+    if (localStorage.getItem('gta2-port-aspect') === null) localStorage.setItem('gta2-port-aspect', 'auto');
+    // Mobile camera (centred on the car; engine patch 0026, Camera button cycles Modern → Mobile → Classic)
+    if (localStorage.getItem('gta2-port-camera') === null) localStorage.setItem('gta2-port-camera', 'mobile');
+  } catch { /* ignore */ }
 
   // ---------- Synthetic keyboard (the port's default bindings, web/shell.js PORT_CONTROLS) ----------
   const KEYS = {
@@ -598,6 +602,7 @@
   let camBias = 0;
   let camTarget = null;
   let camLocked = false;
+  let camMode = 0;
   function camTick() {
     const g = G();
     const s = live();
@@ -606,9 +611,11 @@
       if (camLocked) {
         // back to the shell's own camera: its stored mode and view distance (shell.js wireCameraButton)
         camLocked = false; camTarget = null; camBias = 0;
-        let modern = true, view = 0;
-        try { modern = localStorage.getItem('gta2-port-camera') !== 'classic'; view = Math.max(0, Math.min(3, Number(localStorage.getItem('gta2-port-view-distance')) || 0)); } catch { /* ignore */ }
-        try { g.Module.ccall('gta2_port_set_camera', null, ['number', 'number'], [modern ? 1 : 0, [0, 1.5, 3, 4][view]]); } catch { /* ignore */ }
+        let view = 0;
+        try { view = Math.max(0, Math.min(3, Number(localStorage.getItem('gta2-port-view-distance')) || 0)); } catch { /* ignore */ }
+        let stored = 'modern';
+        try { stored = localStorage.getItem('gta2-port-camera') || 'modern'; } catch { /* ignore */ }
+        try { g.Module.ccall('gta2_port_set_camera', null, ['number', 'number'], [stored === 'classic' ? 0 : stored === 'mobile' ? 2 : 1, [0, 1.5, 3, 4][view]]); } catch { /* ignore */ }
       }
       return;
     }
@@ -616,10 +623,15 @@
     camTarget = camTarget === null ? want : camTarget + (want - camTarget) * 0.08;
     const filtered = s.camZ - camBias; // the port's smoothed canonical height
     const bias = Math.max(-2, Math.min(4, camTarget - filtered));
-    if (!camLocked || Math.abs(bias - camBias) > 0.005) {
+    // the shell's camera mode (its Camera button / landing option): 'mobile' = 2, 'classic' stays Modern here (the bias needs it)
+    let stored = 'mobile';
+    try { stored = localStorage.getItem('gta2-port-camera') || 'mobile'; } catch { /* ignore */ }
+    const modeNum = stored === 'mobile' ? 2 : 1;
+    if (!camLocked || Math.abs(bias - camBias) > 0.005 || modeNum !== camMode) {
       camBias = bias;
+      camMode = modeNum;
       camLocked = true;
-      try { g.Module.ccall('gta2_port_set_camera', null, ['number', 'number'], [1, camBias]); } catch { /* ignore */ }
+      try { g.Module.ccall('gta2_port_set_camera', null, ['number', 'number'], [camMode, camBias]); } catch { /* ignore */ }
     }
   }
 
