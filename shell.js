@@ -2,23 +2,23 @@
 // in-memory filesystem, wires input and the renderer, and starts the core.
 // No game file leaves the device (R01); nothing is fetched from the network
 // except the port itself, or local files in ?devdata=1 developer mode.
-import createGta2 from './gta2.js?v=4a65fbd12c';
-import { SAVE_KEY, SaveStates, exportSaves, importSaves, listSaves, toast } from './savestate.js?v=4a65fbd12c';
-import { SavesScreen } from './saves.js?v=4a65fbd12c';
-import { ControlsScreen } from './controls.js?v=4a65fbd12c';
-import { Gta2Renderer } from './renderer.js?v=4a65fbd12c';
-import { SaveStorage } from './storage.js?v=4a65fbd12c';
-import { Gta2Audio } from './audio.js?v=4a65fbd12c';
-import { GameFileCache, downloadFreeware, unpackInstallerFile } from './gamefiles.js?v=4a65fbd12c';
-import { Gta2Map, exportDiscovery, importDiscovery } from './map.js?v=4a65fbd12c';
-import { hideLanding, landingProgress, showContinue, showLanding, showLeaderboard } from './landing.js?v=4a65fbd12c';
-import { count, initStats, startPlayClock } from './stats.js?v=4a65fbd12c';
-import { CoopChat } from './chat.js?v=4a65fbd12c';
-import { GamepadInput } from './gamepad.js?v=4a65fbd12c';
-import { CoopLobby, DISTRICTS, GANGS, LocalTransport, MODES, ServerTransport, WebRtcTransport } from './net.js?v=4a65fbd12c';
-import { LANGS, lang as currentLang, onLangChange, registerDict, setLang, t } from './strings.js?v=4a65fbd12c';
-import { money } from './savestate.js?v=4a65fbd12c';
-import { ensureGameLanguage, gxtLetterFor, initGameLanguage } from './gamelang.js?v=4a65fbd12c';
+import createGta2 from './gta2.js?v=9de96ca44d';
+import { SAVE_KEY, SaveStates, exportSaves, importSaves, listSaves, toast } from './savestate.js?v=9de96ca44d';
+import { SavesScreen } from './saves.js?v=9de96ca44d';
+import { ControlsScreen } from './controls.js?v=9de96ca44d';
+import { Gta2Renderer } from './renderer.js?v=9de96ca44d';
+import { SaveStorage } from './storage.js?v=9de96ca44d';
+import { Gta2Audio } from './audio.js?v=9de96ca44d';
+import { GameFileCache, downloadFreeware, unpackInstallerFile } from './gamefiles.js?v=9de96ca44d';
+import { Gta2Map, exportDiscovery, importDiscovery } from './map.js?v=9de96ca44d';
+import { hideLanding, landingProgress, showContinue, showLanding, showLeaderboard } from './landing.js?v=9de96ca44d';
+import { count, initStats, startPlayClock } from './stats.js?v=9de96ca44d';
+import { CoopChat } from './chat.js?v=9de96ca44d';
+import { GamepadInput } from './gamepad.js?v=9de96ca44d';
+import { CoopLobby, DISTRICTS, GANGS, LocalTransport, MODES, ServerTransport, WebRtcTransport } from './net.js?v=9de96ca44d';
+import { LANGS, lang as currentLang, onLangChange, registerDict, setLang, t } from './strings.js?v=9de96ca44d';
+import { money } from './savestate.js?v=9de96ca44d';
+import { ensureGameLanguage, gxtLetterFor, initGameLanguage } from './gamelang.js?v=9de96ca44d';
 
 // The shell's own user-facing text, in the web languages (namespace shell.*).
 // Game text lives in data/*.gxt, translated by web/gxt-translations.js.

@@ -4,7 +4,7 @@
 // so the port's default controls, the map screen and the game's menus work unchanged.
 // Only pads with the browser's "standard" mapping are used.
 
-import { t } from './strings.js?v=4a65fbd12c';
+import { t } from './strings.js?v=9de96ca44d';
 
 const STICK_DEADZONE = 0.35;
 
