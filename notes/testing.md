@@ -146,6 +146,12 @@ node scripts/headless.js                                        # smoke test: cl
   died with it. Run plainly (`scripts/dev-servers.sh <exe>` returns in seconds, same servers)
   and set `INSTALLER_MIRROR=http://127.0.0.1:8443/GTA2INSTALLER.exe` by hand. Cause not found
   (the servers' stdout/stderr go to /dev/null; `launch()` starts the site server by itself anyway).
+- **2026-11-02, `scripts/dev-servers.sh … | tail -3` hung too**: the detached servers inherit
+  the pipe, so `tail` never sees EOF (that is also what `source <(…)` waits for). Run the script
+  with no pipe and no process substitution; if it still hangs, start the mirror by hand:
+  `(nohup python3 -I scripts/installer-mirror.py <exe> 8443 >/dev/null 2>&1 &)`. The installer
+  lives in the *gta-js-mobile* scratchpad of this sandbox
+  (`/tmp/claude-0/-home-user-gta-js-mobile/<session>/scratchpad/gta2inst/`), not this repo's.
 - Car models for `h.enterCar(x, model)` are the handling index (`car_model_enum`,
   `Source/enums.hpp`): 10 BUICK (plain), 12 COPCAR (police), 25 HOTDOG_D2 (the fast one used
   in the steering measurements), 83 ZCX5 (the Zaibatsu Z-Type).
