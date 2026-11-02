@@ -107,11 +107,15 @@ padding, never fixed width/height. Keep the reset on the component classes, not 
   camera up to ~4 blocks ahead of a moving car and raises it with speed): the car ends up under
   the thumb. Mode 2 skips that offset entirely (centred like on foot); `gta2_port_set_camera`
   accepts 0/1/2, the shell's Camera button cycles Modern → Mobile → Classic (also a landing
-  option), touch defaults to `mobile`. **Needs a rebuilt `gta2.wasm`**: `engine/build.sh`
-  (Emscripten 6.0.12 + gta2_re + unshield, ~3 GB; the sandbox's classifier refused installing
-  the toolchain). Until rebuilt, mode 2 behaves as Modern. After a rebuild the root files are
-  the build output: our `index.html` hooks come back via `engine/patch-index.py`, and the
-  previous build goes under `old/<id>/` so existing save states still open.
+  option), touch defaults to `mobile`. The engine in this repo **is our rebuild** (build id =
+  first 24 hex of sha256(gta2.wasm); M1sterMo's last build 3213c238… is kept under `old/`).
+  `engine/build.sh <work>` does everything (Emscripten 6.0.12 + gta2_re + prebuilt unshield;
+  the compile itself takes ~30 s on 4 cores). In this sandbox the toolchain and sources live in
+  `/home/user/m1stermo/gta2-browser/research/` (work dir `/home/user/m1stermo`). After a
+  rebuild the root files are the build output: all `?v=` hashes change, the `index.html` hooks
+  come back via `engine/patch-index.py`, the previous build goes under `old/<id>/` so existing
+  save states still open. Measured: while driving the Modern camera leads 2.7 blocks ahead, the
+  Mobile one trails ~0.5 (its follow spring), none ahead.
 - The map screen (`gta2.map.open`) covers the game and pauses it; on touch only our map pill
   stays visible to close it (M). The shell's toolbar `#tools` is hidden on touch and toggled by
   the ⋯ pill (z-index above the overlay so its clicks land).
