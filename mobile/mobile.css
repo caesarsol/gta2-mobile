@@ -175,8 +175,9 @@ html.gta-rotate #gtaReload {
 }
 
 /* ---- Bottom-left: fixed joystick ----
-   Base is 260px (radius 130 = knob clamp). The ring marks the move threshold
-   used by mobile.js (20px). Reverse is by direction, not distance. */
+   Base is 260px (radius 130 = knob clamp). The solid ring marks the dead zone used by
+   mobile.js (20px), the dashed one the aim ring (on foot: turn only, 60px). Reverse is by
+   direction, not distance. */
 #gtaStick {
   --stick-size: 260px;
   position: absolute;
@@ -204,9 +205,25 @@ html.gta-rotate #gtaReload {
   height: 40px;
   border-color: rgba(255, 255, 255, 0.55);
 }
-#gtaStick[data-gear='move'] .gta-ring-move {
+#gtaStick[data-gear='aim'] .gta-ring-move,
+#gtaStick[data-gear='move'] .gta-ring-move,
+#gtaStick[data-gear='move'] .gta-ring-aim {
   border-color: #ffc400;
   border-width: 2px;
+}
+/* On foot only: inside the aim ring the ped turns without walking (mobile.js ringAim) */
+.gta-ring-aim {
+  width: 120px;
+  height: 120px;
+  border-style: dashed;
+}
+#gtaStick[data-vehicle='1'] .gta-ring-aim,
+#gtaMobile[data-mode='menu'] .gta-ring-aim {
+  display: none;
+}
+/* Knob turns white while aiming (turning on the spot, no walking) */
+#gtaStick[data-mode='aim'] #gtaStickKnob {
+  background: rgba(255, 255, 255, 0.9);
 }
 /* Knob turns red-ish while backing up, so the mode is visible under the thumb */
 #gtaStick[data-mode='rev'] #gtaStickKnob {

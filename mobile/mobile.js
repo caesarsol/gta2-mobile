@@ -7,6 +7,7 @@
  * reads the live state the shell already exposes (`window.gta2.map.last`).
  *
  *   Bottom-left  → fixed joystick, absolute direction of travel on screen;
+ *                  on foot: inner (aim) ring turns on the spot, outer ring turns then walks;
  *                  pointing behind a car = reverse (hysteresis)
  *   Right side   → FIRE (KeyL), ENTER/EXIT (Enter), JUMP/BRAKE (Space)
  *   Top bar      → saves, menu (Escape), map (KeyM), fullscreen, sound, tune, shell toolbar, reload
@@ -109,6 +110,7 @@
   root.id = 'gtaMobile';
   root.innerHTML = `
     <div id="gtaStick">
+      <div class="gta-ring gta-ring-aim"></div>
       <div class="gta-ring gta-ring-move"></div>
       <div id="gtaHeading">
         <div class="gta-rev-sector"></div>
@@ -292,10 +294,14 @@
   // ---------- Tunables (editable from the "Tune" panel, persisted) ----------
   const TUNE_KEY = 'gta2-mobile:tune';
   const TUNE_DEFS = [
-    { k: 'ringMove', label: 'Stick · move ring (px)', def: 20, step: 2, min: 6, max: 60,
-      help: 'Dead zone radius. Inside it the stick does nothing; beyond it you walk / drive.' },
+    { k: 'ringMove', label: 'Stick · dead zone (px)', def: 20, step: 2, min: 6, max: 60,
+      help: 'Dead zone radius. Inside it the stick does nothing; beyond it you turn (on foot) or drive.' },
+    { k: 'ringAim', label: 'Stick · aim ring (px)', def: 60, step: 5, min: 20, max: 120,
+      help: 'On foot, between the dead zone and this radius you only turn on the spot (to aim and shoot); beyond it you also walk. In cars any distance drives.' },
     { k: 'turnStart', label: 'Turn · start (°)', def: 5, step: 1, min: 1, max: 30,
       help: 'On foot: dead band before a correction tap. The ped turns in ~5° steps, so the band is at least half a step; this value only raises it. In cars the engine steers (see Steer · …).' },
+    { k: 'walkStart', label: 'Walk · start (°)', def: 20, step: 5, min: 5, max: 90,
+      help: 'On foot you first turn on the spot: walking starts once you face within this angle of the stick direction (and stops again beyond twice it).' },
     { k: 'steerKd', label: 'Steer · look-ahead (ticks)', def: 2, step: 1, min: 0, max: 10,
       help: 'Cars: how many game ticks of yaw momentum the engine-side steering anticipates before letting go. Higher = earlier release, less overshoot; too high = slow turns.' },
     { k: 'steerBand', label: 'Steer · dead band (°)', def: 1.5, step: 0.5, min: 0.5, max: 10,
@@ -346,6 +352,7 @@
   let stickDx = 0, stickDy = 0, stickDist = 0;
   let turning = 0; // -1 = pressing right, 0 = none, +1 = pressing left
   let reversing = false;
+  let walking = false; // on foot: W held (only once roughly facing the stick direction, with hysteresis)
   // On foot the ped turns fast (~12° per game tick at 30 Hz once it is turning) and the key
   // we press is seen a tick late, so holding a turn key until the error is small overshoots by
   // ±20° and oscillates forever (measured: 1.20 ↔ 1.89 rad around a 1.57 target, whatever
@@ -400,6 +407,7 @@
       setSteerTarget(-1);
       turning = 0;
       reversing = false;
+      walking = false;
       tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
       return;
     }
@@ -459,9 +467,15 @@
         }
       }
       turning = 0;
-      setHeld('KeyW', true);
+      // Turn on the spot first, walk once roughly aligned (hysteresis: stop again beyond 2×). In
+      // the aim ring (stick between the dead zone and ringAim) never walk: turn to aim and shoot.
+      const aimOnly = stickDist < T.ringAim;
+      if (aimOnly) walking = false;
+      else if (!walking && mag < deg(T.walkStart)) walking = true;
+      else if (walking && mag > 2 * deg(T.walkStart)) walking = false;
+      setHeld('KeyW', walking);
       setHeld('KeyS', false);
-      stick.dataset.mode = 'fwd';
+      stick.dataset.mode = walking ? 'fwd' : 'aim';
       return;
     }
 
@@ -524,7 +538,7 @@
       dy = (dy / dist) * KNOB_MAX;
     }
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    stick.dataset.gear = dist >= T.ringMove ? 'move' : 'idle';
+    stick.dataset.gear = dist < T.ringMove ? 'idle' : dist < T.ringAim ? 'aim' : 'move';
   }
 
   function endStick() {
@@ -535,6 +549,7 @@
     knob.style.transform = '';
     turning = 0;
     reversing = false;
+    walking = false;
     tapCode = null; tapFrom = null; tapUntil = 0; holdCode = null; holdFrom = null;
     releaseHeld();
     setSteerTarget(-1);
@@ -544,6 +559,8 @@
   function applyTuneVisuals() {
     const move = root.querySelector('.gta-ring-move');
     move.style.width = move.style.height = `${T.ringMove * 2}px`;
+    const aim = root.querySelector('.gta-ring-aim');
+    aim.style.width = aim.style.height = `${T.ringAim * 2}px`;
     const a = root.querySelector('.gta-rev-line-a');
     const b = root.querySelector('.gta-rev-line-b');
     const sec = root.querySelector('.gta-rev-sector');
