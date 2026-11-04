@@ -537,6 +537,19 @@ html.gta-rotate #gtaReload {
   font-size: 16px;
   margin: 0 44px 10px 0; /* clear of the close button */
 }
+/* Spawn row: one pill per vehicle, wrapping */
+.gta-tune-spawn {
+  margin-bottom: 12px;
+}
+.gta-tune-spawn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gta-tune-spawn-row .gta-pill {
+  padding: 6px 12px;
+  font-size: 12px;
+}
 .gta-panel-actions {
   display: flex;
   gap: 10px;

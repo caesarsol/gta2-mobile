@@ -161,6 +161,10 @@
       <button type="button" class="gta-pill gta-panel-close gta-tune-close" aria-label="Close">✕</button>
       <div class="gta-panel-scroll">
         <div class="gta-panel-title">Tune controls</div>
+        <div class="gta-tune-spawn">
+          <div class="gta-tune-group-title">Spawn</div>
+          <div class="gta-tune-spawn-row"></div>
+        </div>
         <div class="gta-tune-rows"></div>
         <div class="gta-panel-actions">
           <button type="button" class="gta-pill gta-pill--danger gta-tune-reset">Reset defaults</button>
@@ -788,6 +792,35 @@
     }
   }
   onTap(root.querySelector('#gtaTune'), () => { renderTune(); tunePanel.hidden = false; });
+
+  // Spawn a vehicle right in front of you (dev hook gta2_dev_spawn_car_near), side-on, its left
+  // (driver's) door toward you: you get in yourself. Models are the handling index; the names
+  // are the game's own for that index (text "car<n>", gta2_dev_car_name; the source's enum names
+  // do not match: 83 is the Furore GT, 69 the U-Jerk Truck). GTA2 has no motorbikes.
+  const SPAWN_MODELS = [['Tank', 54], ['Z-Type', 70], ['Furore GT', 83], ['Land Roamer', 22], ['Cop Car', 12], ['Fire Truck', 17], ['Bus', 11], ['Bug', 8]];
+  const SPAWN_GAP = 0.9; // blocks from you to the car's centre (on foot; 2.5 from a car you drive)
+  function spawnVehicle(model) {
+    const g = G();
+    const s = live();
+    if (!g || !g.Module || mode !== 'play' || !s || !s.hasPlayer) return false;
+    const a = s.heading; // forward (sin a, cos a) in map coordinates, A (left) increases a
+    const gap = (readDev() && readDev().inCar ? 2.5 : SPAWN_GAP) * 16384;
+    // car heading a + 90°: its left side points back at you
+    const rot = Math.round(((((a + Math.PI / 2) % TAU) + TAU) % TAU) / TAU * 1440) % 1440;
+    try {
+      return !!g.Module.ccall('gta2_dev_spawn_car_near', 'number', ['number', 'number', 'number', 'number'],
+        [model, Math.round(gap * Math.sin(a)), Math.round(gap * Math.cos(a)), rot]);
+    } catch { return false; }
+  }
+  const spawnRow = tunePanel.querySelector('.gta-tune-spawn-row');
+  for (const [name, model] of SPAWN_MODELS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'gta-pill';
+    b.textContent = name;
+    spawnRow.appendChild(b);
+    onTap(b, () => { tunePanel.hidden = true; spawnVehicle(model); });
+  }
   onTap(root.querySelector('#gtaChartsBtn'), () => { T.charts = T.charts ? 0 : 1; saveTune(); applyTuneVisuals(); });
   onTap(tunePanel.querySelector('.gta-tune-close'), () => { tunePanel.hidden = true; });
   onTap(tunePanel.querySelector('.gta-tune-reset'), () => {

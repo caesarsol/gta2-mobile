@@ -59,7 +59,11 @@ groups rows by the label's group and flows the groups down two CSS columns (`col
 `break-inside: avoid`), ✕ pill absolute in the corner (the inner `.gta-panel-scroll` scrolls,
 padded on the left by the notch inset), small Reset. `saveTune` stores **only values that differ
 from the default**, so a changed default reaches everyone who left that setting alone (no
-migration list). Tap the label for the help text. No probes or screenshots for this panel (user
+migration list). Tap the label for the help text. A **Spawn · get in** row on top (`SPAWN_MODELS`:
+Tank 54, Z-Type 83, Gun jeep 22, Police 12, Fire truck 17, Bus 11, Bike 69) closes the panel,
+gets out of the current car (handbrake, then Enter), spawns the model 2 blocks ahead
+(`gta2_dev_spawn_car`, same heading) and presses Enter (the door walk takes ~4 s). Pushed
+untested on request (2026-11-04). No probes or screenshots for this panel (user
 request): edit and push.
 
 ## Touch hardening
