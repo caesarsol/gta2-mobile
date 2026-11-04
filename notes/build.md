@@ -11,7 +11,7 @@ gta2-browser with our patches; M1sterMo's last build (`3213c238…`) is kept und
    `engine/port-web.patch` (our changes to `port/`, `web/`, `scripts/` there) and the gta2_re
    patches `engine/00NN-*.patch` (0026 Mobile camera: mode 2, pinned to its target, look-ahead
    hook; 0027 steering: key override hook, wheel-angle scale hook, road assist off + note hooks;
-   0028 analog throttle cap hook) onto `research/port-work/core`
+   0028 analog throttle cap hook; 0029 tank turret aim hook) onto `research/port-work/core`
    (stale copies of our patches in `port/patches` are removed first);
 2. installs Emscripten 6.0.12 under `research/toolchains/emsdk` (first time only, ~300 MB; the
    download was once blocked by a classifier and then went through on retry) and the prebuilt
@@ -37,6 +37,8 @@ re-creates the core from the patches, so the core's history is ours to rewrite.
   `_steer_debug` (12 ints); `Gta2Port_SteerOverride` / `Gta2Port_SteerScale` /
   `Gta2Port_SteerAssistOff` / `Gta2Port_NoteSteerAssist` called from patch 0027,
   `Gta2Port_ThrottleCap` from 0028 (see `notes/engine.md`, Cars).
+- `port/platform/turret_web.cpp` — `gta2_port_set_turret_target`, `gta2_port_turret_state`;
+  `Gta2Port_TurretOverride` called from patch 0029 (see `notes/engine.md`, Cars).
 - `port/platform/mobile_camera_web.cpp` — `gta2_port_set_camera_lead(k, max)` (the camera
   itself is pinned to its target in patch 0026).
 - `port/platform/dev_hooks.cpp` — `gta2_dev_*` (`find_open` is ours).
@@ -75,5 +77,12 @@ re-creates the core from the patches, so the core's history is ours to rewrite.
   check `grep '^new file' engine/port-web.patch` after regenerating. `build.sh` resets the tree
   to the pinned commit and re-applies the patch whenever the reverse-apply check fails (any edit
   since the last export), so a partial patch would silently drop the rest of a file.
+- **2026-11-04, fresh sandbox**: the unshield build failed (emscripten's zlib port download
+  from github.com → 403 through the proxy). Copy the published `unshield.js`, `unshield.wasm`,
+  `unshield-LICENSE.txt` from the repo root into `<work>/gta2-browser/build/unshield/` first
+  (build.sh then skips it). The toolchain + first build took ~10 min; an unchanged rebuild
+  reproduced 3e0b55df but rewrote every `?v=` hash in the root JS (`git checkout -- .`).
+  New port files must be `git add -N`'d in `<work>/gta2-browser` before regenerating
+  `engine/port-web.patch` (`git diff -- port/platform port/render scripts web`).
 - The core's commit hashes change on every `--prepare` (the core is re-created from the
   patches): take the hash to `--fixup` from `git log` at that moment, never from a note.

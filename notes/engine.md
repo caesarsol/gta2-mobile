@@ -170,6 +170,17 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   (≥ 256 = skidding, the engine's skidmark / sound test), 10 road assist correction
   (units/tick), 11 gas pedal (Fix16, 0..5).
 - The overlay shows `Car <model>` under the weapon pills while driving (model = handling index).
+- **Tank turret (patch 0029 + `port/platform/turret_web.cpp`)**: GTA2 turns a roof turret only
+  with Special (I) + A/D (`Car_BC::HandleRoofTurretRotation_440D90`; tank: attached sprite of
+  object model 148, `field_10_rot` relative to the hull, `kTankTurretRotSpeed` 20 units = 5° per
+  tick). The tank gun fires along the turret sprite's absolute rotation. The port's
+  `gta2_port_set_turret_target(units)` (world heading, the car sprite's units = `map.last`
+  heading; −1 off) turns the local player's tank turret toward it at 5°/tick from
+  `HandleUserInput_4418D0` (after the game's own turret keys) and keeps it on that world heading
+  while the hull turns; `gta2_port_turret_state()` → [is a tank, turret world heading, target,
+  on target]. Measured (2026-11-04): 180° in ~2 s headless (≈ 20 ticks/s there), stays on
+  target while the hull turns 62°; the cannon is drawn along the target (screenshot).
+  `RotateRoofObjectTowardTarget_440C10` exists too (AI, 1°/tick): too slow for the player.
 
 ## Camera
 

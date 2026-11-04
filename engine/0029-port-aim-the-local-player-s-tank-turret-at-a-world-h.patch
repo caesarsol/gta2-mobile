@@ -1,0 +1,43 @@
+From cd864c37e195eaa3fa646201b65b00a0101056b0 Mon Sep 17 00:00:00 2001
+From: caesarsol <smilemachine@gmail.com>
+Date: Wed, 4 Nov 2026 13:08:20 +0000
+Subject: [PATCH] port: aim the local player's tank turret at a world heading
+ (GTA2 Mobile Fire ring)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Car_BC::HandleUserInput_4418D0 calls Gta2Port_TurretOverride after the game's own turret keys:
+the port turns the local player's tank turret toward a target world heading at the tank's own
+turret speed (5° per tick) and keeps it there while the hull turns (port/platform/turret_web.cpp).
+---
+ Source/Car_BC.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/Car_BC.cpp b/Source/Car_BC.cpp
+index d1f6456b..9f687a5f 100644
+--- a/Source/Car_BC.cpp
++++ b/Source/Car_BC.cpp
+@@ -2,6 +2,7 @@
+ #include "port_coop.hpp"
+ class Car_BC;
+ extern "C" void Gta2Port_SteerOverride(Car_BC* car, char* bLeftOn, char* bRightOn);
++extern "C" void Gta2Port_TurretOverride(Car_BC* car);
+ #endif
+ #include "Car_BC.hpp"
+ #include "explosion_type.hpp"
+@@ -5211,6 +5212,11 @@ void Car_BC::HandleUserInput_4418D0(char_type bForwardGasOn,
+         bRightOn = 0;
+         bNowSpecialPressed = 0;
+     }
++#ifdef GTA2_PORT
++    // GTA2 Mobile: the Fire ring aims the tank's turret at a world heading
++    // (port/platform/turret_web.cpp).
++    Gta2Port_TurretOverride(this);
++#endif
+ 
+     if (bWasSpecialPressed)
+     {
+-- 
+2.43.0
+
