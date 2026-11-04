@@ -110,6 +110,14 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   handling data's skid thresholds no longer matter. Applied whether or not a steering target is
   set (a coasting car would slide otherwise). Side effects accepted: a sideways push (another
   car, an explosion) is cancelled the next tick, so the car cannot be shoved sideways.
+- **Grip pins the tank at a standstill** (measured 2026-11-04, model 54 on the long road): from
+  a standstill with the wheels turned (stick 8° off, or the keyboard W + A) the tank sits at
+  0.008 blocks/tick (Fix16 128), pedal 5, heading frozen, for as long as the wheels stay
+  turned; straightening them lets it go. Grip 0: it starts and turns at once. Model 25 is not
+  affected; at the tank's cruise (0.10, its top speed) small corrections work with either grip.
+  Exact mechanism not traced (heavy + little thrust vs the per-tick realignment). The overlay
+  sends grip 0 while driving the tank (`NO_GRIP_MODELS`); a speed fade-in (0 below 0.02–0.03,
+  full above, emulated from JS) also cured it but was not chosen.
 - **Jitter a few degrees off a road's axis = the override fighting GTA2's road steer assist**
   (measured 2026-11-02, Z-Type on the long road, stick at axis + 5°, Tune defaults and grip 0
   alike): the car never holds 5°; it sits at 0.8–2° and the heading cycles 0.8 → 2 → 1.3 → 1 →
@@ -238,6 +246,9 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
 - `build_pages.py` (upstream) refuses `*.wav` → our silent loop is an inline data URI.
 
 ## Lessons (add yours, dated)
+
+- 2026-11-04: "the stick stops responding in the tank" was the grip, not the stick: the
+  keyboard got stuck the same way. Before blaming the overlay, repeat with keys (testing rule 7).
 
 - 2026-11: weapon names were read off the HUD icon order; the engine enum is the truth.
 - 2026-11: "cars auto-straighten in free space" was a misread probe (kerb scraping on a

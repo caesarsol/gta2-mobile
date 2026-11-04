@@ -317,7 +317,7 @@
     { k: 'steerSoft', label: 'Steer · soft zone (°)', def: 30, step: 5, min: 0, max: 90,
       help: 'Cars: GTA2 itself steers at full lock only, which slides at speed. Within this angle of the stick direction the wheel angle is reduced (square root of the remaining error), full lock beyond it and at low speed. 0 = always full lock (jabs and slides).' },
     { k: 'steerGrip', label: 'Steer · grip (%)', def: 100, step: 10, min: 0, max: 100,
-      help: 'Cars: every tick the car\'s velocity is turned onto its heading by this much. 100 = GTA1-style, the car never slides and goes exactly where it points, keeping its speed through turns. 0 = GTA2\'s own physics (skids at speed).' },
+      help: 'Cars: every tick the car\'s velocity is turned onto its heading by this much. 100 = GTA1-style, the car never slides and goes exactly where it points, keeping its speed through turns. 0 = GTA2\'s own physics (skids at speed). The tank always gets 0 (it gets stuck at a standstill otherwise).' },
     { k: 'throttleFull', label: 'Throttle · full at (px)', def: 110, step: 10, min: 0, max: 130,
       help: 'Cars: the stick distance is the gas pedal. Between the dead zone and this radius the engine\'s pedal is capped in proportion (a little way out = gentle, this far = full). 0 = always full gas, as before.' },
     { k: 'charts', label: 'Charts · show', def: 0, step: 1, min: 0, max: 1, bool: true,
@@ -522,17 +522,26 @@
   padProbe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;height:0;width:var(--pad-l)';
   root.appendChild(padProbe);
   let steerParamsSent = '';
+  // Grip (%) to send now. The tank gets none: heavy and weak, from a standstill with the wheels
+  // turned the grip pins it at ~0.008 blocks/tick, neither moving nor turning until the wheels
+  // straighten (keyboard too; notes/engine.md, Cars).
+  const NO_GRIP_MODELS = new Set([54]); // car_model_enum::TANK
+  function gripNow() {
+    if (devState && devState.inCar && NO_GRIP_MODELS.has(devState.carModel)) return 0;
+    return T.steerGrip;
+  }
   function applySteerParams() {
     const g = G();
     if (!g || !g.Module) return;
     const canvas = document.getElementById('screen');
     const padL = Math.max(20, padProbe.offsetWidth || 0);
     const hudInset = canvas && canvas.clientHeight ? Math.round(padL * 480 / canvas.clientHeight) : 0;
-    const sig = `${T.steerKd}:${T.steerBand}:${T.steerSoft}:${T.steerGrip}:${T.camLead}:${hudInset}`;
+    const grip = gripNow();
+    const sig = `${T.steerKd}:${T.steerBand}:${T.steerSoft}:${grip}:${T.camLead}:${hudInset}`;
     if (sig === steerParamsSent) return;
     try { g.Module.ccall('gta2_port_set_steer_params', null, ['number', 'number'], [Math.round(T.steerKd), Math.round(T.steerBand * 4)]); } catch { /* older engine */ }
     try { g.Module.ccall('gta2_port_set_steer_ramp', null, ['number'], [Math.round(T.steerSoft * 4)]); } catch { /* older engine */ }
-    try { g.Module.ccall('gta2_port_set_steer_grip', null, ['number'], [Math.round(T.steerGrip * 2.56)]); } catch { /* older engine */ }
+    try { g.Module.ccall('gta2_port_set_steer_grip', null, ['number'], [Math.round(grip * 2.56)]); } catch { /* older engine */ }
     try { g.Module.ccall('gta2_port_set_camera_lead', null, ['number', 'number'], [T.camLead, 3]); } catch { /* older engine */ }
     try { g.Module.ccall('gta2_port_set_hud_inset', null, ['number'], [hudInset]); } catch { /* older engine */ }
     steerParamsSent = sig;
