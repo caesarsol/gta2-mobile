@@ -118,6 +118,11 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   Exact mechanism not traced (heavy + little thrust vs the per-tick realignment). The overlay
   sends grip 0 while driving the tank (`NO_GRIP_MODELS`); a speed fade-in (0 below 0.02–0.03,
   full above, emulated from JS) also cured it but was not chosen.
+- **The tank does not turn on the spot** (measured 2026-11-04, test area, keyboard, clean start):
+  A or D alone for 3 s: heading and position unchanged, in the tank (54) as in a plain car (10);
+  so does the engine steering target without W. W + D 1 s from a standstill: −14.5°, 1.0 block;
+  S + D: 0°, 0.13 block. GTA2's tank steers like a car (front wheels, needs speed); spinning in
+  place would need an engine patch (rotate the hull directly), not a key combination.
 - **No grip while the handbrake is held** (overlay, `gripNow()`: the Brake button = Space in
   `down`): GTA2's handbrake slides come back. Measured 2026-11-04, model 25 on the long road,
   handbrake + stick 40° for 1.5 s: overlay press → slip up to 24° held for ~0.6 s, heading
@@ -298,3 +303,5 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
 - 2026-11: a proportional lock with a linear law looked right in the first run and wrong in
   the next: the test variants were tied to fixed road offsets (variant i always at offset i),
   so place and law were confounded. Rotate offsets across variants.
+- 2026-11-04: "the tank spins on the spot with D alone, like the keyboard" was assumed, not true:
+  measure the engine's behaviour (keys, with a W control) before building a mapping on it.
