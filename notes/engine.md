@@ -125,7 +125,7 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   stops at 41°. (Entry speeds differed, 0.41 vs 0.21: a qualitative check.) A real keyboard
   Space does not switch the grip off (only the overlay's own presses are tracked).
 - **Jitter a few degrees off a road's axis = the override fighting GTA2's road steer assist**
-  (measured 2026-11-02, Z-Type on the long road, stick at axis + 5°, Tune defaults and grip 0
+  (measured 2026-11-02, model 83 (Furore GT, then believed to be the Z-Type) on the long road, stick at axis + 5°, Tune defaults and grip 0
   alike): the car never holds 5°; it sits at 0.8–2° and the heading cycles 0.8 → 2 → 1.3 → 1 →
   0.8 every 4 frames (~5 Hz, ±1°), one 1/3-lock jab per cycle (`steer_debug` key 1 / scale
   ~85 one frame in four), **in the middle of the road** (lateral position 0.5–0.85 blocks from
@@ -159,7 +159,7 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   multiplier; `ComputeTorqueFromThrottle_561DD0`), i.e. pedal 0 still gives half the model's
   thrust and pedal 5 gives 1.5×: a 3:1 range of engine force, not of speed. The speed limit
   (`EnforceGearSensitiveMaxSpeed_562D00`, `field_28_max_speed`) does not depend on the pedal.
-  Measured (2026-11-02, Z-Type, long road, stick along the axis, 5 s): stick 40 px → pedal
+  Measured (2026-11-02, model 83 = Furore GT, long road, stick along the axis, 5 s): stick 40 px → pedal
   1.11, steady 0.08 blocks/tick; 75 px → pedal 3.05, 0.19; 130 px → pedal 5, 0.30 (still
   rising at 5 s, top ~0.32). Drag makes the steady speed roughly follow the torque, so the stick
   distance does act as a speed control, 1:4 between the dead zone and full.
@@ -169,7 +169,28 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   + = left), 7 speed (Fix16), 8/9 front/rear wheel force ÷ the handling's skid threshold × 256
   (≥ 256 = skidding, the engine's skidmark / sound test), 10 road assist correction
   (units/tick), 11 gas pedal (Fix16, 0..5).
-- The overlay shows `Car <model>` under the weapon pills while driving (model = handling index).
+- The overlay shows `Car <model>` under the weapon pills while driving (model = handling index;
+  names in `notes/reference.md`, read with `gta2_dev_car_name`).
+- **Dev hooks for the Tune panel** (2026-11-04): `gta2_dev_spawn_car_near(model, dx, dy, rot)`
+  spawns at an offset in Fix16 raw units (sub-block, unlike `gta2_dev_spawn_car`'s whole
+  blocks), nobody gets in. A first version seated the player directly (`SpawnPedInCar_45C730`
+  as `gta2_dev_seat_player_driver` does): it skipped `Player::LoadCarWeapons_564AD0`, so a
+  tank had no gun selected (weapon −1); dropped when the user asked for spawn only.
+  Enter boards the **nearest** car: spawning next to a car you just left and pressing Enter
+  boards the old one.
+- **Test area** (`port/platform/test_area_web.cpp`, `gta2_dev_test_area(x0, y0, size)`, x0 < 0
+  = automatic): three columns built in the map's runtime-change room (road and pavement cloned
+  from the most common flat lid at the main ground level, arrows cleared; a wall = the road
+  column + two blocks with wall faces on all sides), and every `base` entry of a square pointed
+  at them: wall ring, pavement ring inside it, road, 4 × 4 pavement islands every 20 blocks.
+  The square is the largest with no live object within 2 blocks (ped crossing markers /
+  triggers and sound objects ignored): Downtown 41 × 41 at (99, 0). Tried and dropped:
+  the bottom-right corner (cranes, a car crusher, phones, pickups — all script objects);
+  removing objects inside (`Dealloc_5291B0` on everything crashed the page on the next car
+  entry; matching the map file's object list removed nothing: it is empty in Downtown); the
+  first road block found had a decorative lid (arches), hence the most-common-lid rule.
+  `gta2_dev_area_objects(x0, y0, size, out, max)` lists objects there (debug). The radar /
+  map screen keep their load-time picture of the old streets.
 - **Tank turret (patch 0029 + `port/platform/turret_web.cpp`)**: GTA2 turns a roof turret only
   with Special (I) + A/D (`Car_BC::HandleRoofTurretRotation_440D90`; tank: attached sprite of
   object model 148, `field_10_rot` relative to the hull, `kTankTurretRotSpeed` 20 units = 5° per

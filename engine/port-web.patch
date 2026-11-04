@@ -1,5 +1,5 @@
 diff --git a/port/platform/dev_hooks.cpp b/port/platform/dev_hooks.cpp
-index 0710744..08ea0ca 100644
+index 0710744..8d54169 100644
 --- a/port/platform/dev_hooks.cpp
 +++ b/port/platform/dev_hooks.cpp
 @@ -178,6 +178,54 @@ EMSCRIPTEN_KEEPALIVE const s32* gta2_dev_find_road()
@@ -57,6 +57,29 @@ index 0710744..08ea0ca 100644
  // Test aid: unlocks all three areas for the current player, as the original's
  // UKGAMER player-name cheat does (Frontend.cpp).
  EMSCRIPTEN_KEEPALIVE int gta2_dev_unlock_areas()
+@@ -490,6 +538,22 @@ EMSCRIPTEN_KEEPALIVE int gta2_dev_seat_player_driver(int slot, int model, int dx
+     return 1;
+ }
+ 
++// Test aid (GTA2 Mobile Tune panel): spawns a car of `model` at (dx, dy) from the player in
++// Fix16 raw units (16384 = one block, so it can stand right in front of the player), facing
++// rot (Ang16 units). Nobody gets in. Returns 1, or 0 when it could not be spawned.
++EMSCRIPTEN_KEEPALIVE int gta2_dev_spawn_car_near(int model, int dx, int dy, int rot)
++{
++    Ped* ped = PlayerPed();
++    Sprite* s = ped ? PlayerSprite(ped) : nullptr;
++    if (!s || !gCar_6C_677930)
++    {
++        return 0;
++    }
++    Car_BC* car = gCar_6C_677930->SpawnCarAt_446230(s->field_14_xy.x + Fix16(dx, 0), s->field_14_xy.y + Fix16(dy, 0),
++                                                    s->field_1C_zpos, Ang16(rot), model, Fix16(1));
++    return car ? 1 : 0;
++}
++
+ // Test aid: who is in player `slot`'s car: [in a car, driver is that player, passengers, player
+ // `other` is a passenger of it].
+ EMSCRIPTEN_KEEPALIVE const s32* gta2_dev_car_occupants(int slot, int other)
 diff --git a/port/platform/mobile_camera_web.cpp b/port/platform/mobile_camera_web.cpp
 new file mode 100644
 index 0000000..23bc91f
@@ -402,6 +425,432 @@ index 0000000..6f23b48
 +    gDebug[3] = key;
 +    gDebug[4] = scale;
 +}
+diff --git a/port/platform/test_area_web.cpp b/port/platform/test_area_web.cpp
+new file mode 100644
+index 0000000..cc738e5
+--- /dev/null
++++ b/port/platform/test_area_web.cpp
+@@ -0,0 +1,420 @@
++// GTA2 Mobile: an ad hoc test area carved into the current map (test aid, on demand).
++//
++// The district maps fill all 256 x 256 columns, so there is no empty space to use and nothing
++// beyond the edge can be addressed. Instead a square of the map (default: the bottom-right
++// corner) is rewritten into a driving test ground: a wall all round, a ring of pavement inside
++// it, then plain road everywhere with a few pavement islands. The road blocks carry no arrows,
++// and GTA2 only generates traffic on arrowed road, so no traffic drives in. Peds may still walk
++// on the pavement.
++//
++// How: the map's compressed form (gmp_compressed_map_32) points every (x, y) at a column of
++// block indices, and columns are shared. The loader keeps room for runtime changes (1024
++// column words, 200 blocks: Map_0x370::field_35C / field_350, used by the mission scripts'
++// CHANGE_BLOCK etc.). Three columns are built there (road, pavement, wall), cloned from real
++// ones at the main ground level so heights match, and the square's base entries are pointed at
++// them. The change lives in memory only: a new game or a load restores the map (the port's
++// save states snapshot memory, so a save made inside keeps it).
++//
++// Where: x0 < 0 picks the largest square (up to `size`) with no live object near it
++// (FindFreeSquare): the scripts' objects (phones, pickups, cranes, crushers, trigger areas)
++// cannot be removed safely, so the area goes where there are none (Downtown: 41 x 41 at the
++// top edge, x 99). The map file's own scenery list is empty in Downtown.
++//
++// gta2_dev_test_area(x0, y0, size) builds it (idempotent while the map stays loaded) and
++// returns [ok, centre x, centre y, ground z, x0, y0, size, reason]; ok 0 = refused (reason:
++// 1 no map, 2 no reference road / pavement column, 3 no room left in the runtime map buffers,
++// 4 bad rectangle).
++#include <emscripten.h>
++#include <string.h>
++
++#include "Object_2C_Pool.hpp"
++#include "Object_5C.hpp"
++#include "map_0x370.hpp"
++#include "text_0x14.hpp"
++#include <stdio.h>
++#include "sprite.hpp"
++
++namespace
++{
++s32 gOut[8];
++gmp_compressed_map_32* gBuiltFor = nullptr;
++u32 gRoadCol = 0, gPaveCol = 0, gWallCol = 0;
++s32 gBuilt[4] = {-1, -1, -1, -1}; // x0, y0, size, z
++
++const u16 kWallBit = 1 << 10; // side face: wall (collision)
++
++gmp_col_info* Col(u32 idx)
++{
++    return reinterpret_cast<gmp_col_info*>(&gMap_0x370_6F6268->field_0_pDmap->field_40008_pColumn[idx]);
++}
++
++// The ground level most flat road tops sit at (the main street level).
++s32 GroundZ()
++{
++    s32 count[8] = {0};
++    for (s32 y = 0; y < 256; y += 2)
++    {
++        for (s32 x = 0; x < 256; x += 2)
++        {
++            for (s32 z = 0; z < 7; ++z)
++            {
++                gmp_block_info* b = gMap_0x370_6F6268->get_block_4DFE10(x, y, z);
++                gmp_block_info* above = gMap_0x370_6F6268->get_block_4DFE10(x, y, z + 1);
++                if (b && (b->field_B_slope_type & 3) == ROAD && (b->field_B_slope_type >> 2) == 0 &&
++                    (!above || (above->field_B_slope_type & 3) == AIR))
++                {
++                    ++count[z];
++                }
++            }
++        }
++    }
++    s32 best = 0;
++    for (s32 z = 1; z < 8; ++z)
++    {
++        if (count[z] > count[best])
++        {
++            best = z;
++        }
++    }
++    return best;
++}
++
++// A column whose top block is at z, flat, of the given ground type, with the lid tile most
++// such blocks use (plain asphalt / paving rather than a one-off); prefers no arrows.
++bool FindColumn(s32 z, s32 type, u32* outCol, u32* outBlock)
++{
++    gmp_compressed_map_32* d = gMap_0x370_6F6268->field_0_pDmap;
++    static s32 lidCount[1024];
++    memset(lidCount, 0, sizeof(lidCount));
++    for (s32 pass = 0; pass < 2; ++pass)
++    {
++    s32 bestLid = 0;
++    for (s32 t = 1; t < 1024; ++t)
++    {
++        if (lidCount[t] > lidCount[bestLid])
++        {
++            bestLid = t;
++        }
++    }
++    bool found = false;
++    for (s32 y = 0; y < 256; ++y)
++    {
++        for (s32 x = 0; x < 256; ++x)
++        {
++            const u32 idx = *d->get_base_42A830(y, x);
++            gmp_col_info* c = Col(idx);
++            if (c->field_0_height != z + 1 || z < c->field_1_offset)
++            {
++                continue;
++            }
++            const u32 bi = static_cast<u32>(c->field_4_blockd[z - c->field_1_offset]);
++            gmp_block_info* b = &d->field_4000C_block[bi];
++            if ((b->field_B_slope_type & 3) != type || (b->field_B_slope_type >> 2) != 0 || !(b->field_8_lid & 0x3FF))
++            {
++                continue;
++            }
++            if (pass == 0)
++            {
++                ++lidCount[b->field_8_lid & 0x3FF];
++                continue;
++            }
++            if ((b->field_8_lid & 0x3FF) != bestLid)
++            {
++                continue;
++            }
++            if (!found || b->field_A_arrows == 0)
++            {
++                *outCol = idx;
++                *outBlock = bi;
++                found = true;
++                if (b->field_A_arrows == 0)
++                {
++                    return true;
++                }
++            }
++        }
++    }
++    if (pass == 1)
++    {
++        return found;
++    }
++    }
++    return false;
++}
++
++// A block with a wall face on all four sides (a free-standing structure), for the border.
++bool FindWallBlock(gmp_block_info* out)
++{
++    gmp_compressed_map_32* d = gMap_0x370_6F6268->field_0_pDmap;
++    const s32 n = gMap_0x370_6F6268->field_34C_num_blocks;
++    bool partial = false;
++    for (s32 i = 0; i < n; ++i)
++    {
++        const gmp_block_info& b = d->field_4000C_block[i];
++        const u16 f[4] = {b.field_0_left, b.field_2_right, b.field_4_top, b.field_6_bottom};
++        s32 walls = 0;
++        for (u16 v : f)
++        {
++            walls += (v & kWallBit) && (v & 0x3FF) ? 1 : 0;
++        }
++        if (walls == 4 && (b.field_8_lid & 0x3FF) && (b.field_B_slope_type >> 2) == 0)
++        {
++            *out = b;
++            return true;
++        }
++        if (walls > 0 && !partial)
++        {
++            // fallback: one textured wall face everywhere
++            u16 face = 0;
++            for (u16 v : f)
++            {
++                if ((v & kWallBit) && (v & 0x3FF))
++                {
++                    face = v;
++                }
++            }
++            *out = b;
++            out->field_0_left = out->field_2_right = out->field_4_top = out->field_6_bottom = face;
++            partial = true;
++        }
++    }
++    return partial;
++}
++
++// The largest square (up to maxSize) with no live object within 2 blocks: the area must not
++// cover anything the mission scripts placed (phones, pickups, crushers, cranes, trigger
++// areas — scripts hold pointers to them, so they cannot be removed). Invisible markers
++// (ped crossing markers / triggers, sound objects) do not count. Returns the side, 0 if none.
++s32 FindFreeSquare(s32 maxSize, s32* outX, s32* outY)
++{
++    static u8 occ[256][256];
++    static s16 sq[257][257];
++    memset(occ, 0, sizeof(occ));
++    memset(sq, 0, sizeof(sq));
++    if (gObject_2C_Pool_6F8F80)
++    {
++        for (Object_2C& o : gObject_2C_Pool_6F8F80->field_8_pool)
++        {
++            const s32 m = o.field_18_model;
++            if (!m || !o.field_4 || m == 122 || m == 258 || m == 278)
++            {
++                continue;
++            }
++            const s32 bx = o.field_4->field_14_xy.x.ToInt(), by = o.field_4->field_14_xy.y.ToInt();
++            for (s32 y = by - 2; y <= by + 2; ++y)
++            {
++                for (s32 x = bx - 2; x <= bx + 2; ++x)
++                {
++                    if (x >= 0 && y >= 0 && x < 256 && y < 256)
++                    {
++                        occ[y][x] = 1;
++                    }
++                }
++            }
++        }
++    }
++    s32 best = 0;
++    for (s32 y = 0; y < 256; ++y)
++    {
++        for (s32 x = 0; x < 256; ++x)
++        {
++            if (occ[y][x])
++            {
++                continue;
++            }
++            s32 v = sq[y][x + 1] < sq[y + 1][x] ? sq[y][x + 1] : sq[y + 1][x];
++            v = (v < sq[y][x] ? v : sq[y][x]) + 1;
++            sq[y + 1][x + 1] = static_cast<s16>(v);
++            const s32 side = v < maxSize ? v : maxSize;
++            if (side > best)
++            {
++                best = side;
++                *outX = x - side + 1;
++                *outY = y - side + 1;
++            }
++        }
++    }
++    return best;
++}
++
++bool Refuse(s32 reason)
++{
++    memset(gOut, 0, sizeof(gOut));
++    gOut[7] = reason;
++    return false;
++}
++
++bool Build(s32 x0, s32 y0, s32 size)
++{
++    Map_0x370* m = gMap_0x370_6F6268;
++    if (!m || !m->field_0_pDmap)
++    {
++        return Refuse(1);
++    }
++    if (x0 < 0 || y0 < 0)
++    {
++        // automatic: the area built earlier on this map if it is still there, else a free square
++        gmp_compressed_map_32* d = m->field_0_pDmap;
++        if (gBuiltFor == d && gBuilt[0] >= 0 && *d->get_base_42A830(gBuilt[1], gBuilt[0]) == gWallCol)
++        {
++            return true;
++        }
++        size = FindFreeSquare(size, &x0, &y0);
++    }
++    if (size < 16 || x0 < 0 || y0 < 0 || x0 + size > 256 || y0 + size > 256)
++    {
++        return Refuse(4);
++    }
++    gmp_compressed_map_32* d = m->field_0_pDmap;
++    const bool sameArea = gBuilt[0] == x0 && gBuilt[1] == y0 && gBuilt[2] == size;
++    if (gBuiltFor == d && sameArea && *d->get_base_42A830(y0, x0) == gWallCol)
++    {
++        return true; // still there
++    }
++    const s32 z = GroundZ();
++    u32 roadRef, roadBlock, paveRef, paveBlock;
++    if (!FindColumn(z, ROAD, &roadRef, &roadBlock) || !FindColumn(z, PAVEMENT, &paveRef, &paveBlock))
++    {
++        return Refuse(2);
++    }
++    gmp_block_info wall;
++    const bool haveWall = FindWallBlock(&wall);
++    // room: three columns (header + up to z + 3 blocks each) and three blocks
++    const s32 words = 3 * (z + 4);
++    if ((s32)m->field_360_column_words + words > m->field_35C_column_word_extra ||
++        (s32)m->field_354_num_blocks + 3 > m->field_350_num_blocks_extra || !haveWall)
++    {
++        return Refuse(haveWall ? 3 : 2);
++    }
++    gmp_block_info road = d->field_4000C_block[roadBlock];
++    road.field_A_arrows = 0;
++    gmp_block_info pave = d->field_4000C_block[paveBlock];
++    pave.field_A_arrows = 0;
++    wall.field_A_arrows = 0;
++    wall.field_B_slope_type = (wall.field_B_slope_type & ~3) | PAVEMENT;
++    const s32 roadBi = m->AddBlock_4E8140(&road);
++    const s32 paveBi = m->AddBlock_4E8140(&pave);
++    const s32 wallBi = m->AddBlock_4E8140(&wall);
++
++    gRoadCol = m->CloneOriginalColumn_4E81D0(roadRef);
++    Col(gRoadCol)->field_4_blockd[z - Col(gRoadCol)->field_1_offset] = roadBi;
++    gPaveCol = m->CloneOriginalColumn_4E81D0(paveRef);
++    Col(gPaveCol)->field_4_blockd[z - Col(gPaveCol)->field_1_offset] = paveBi;
++    // wall: the road column plus two wall blocks on top
++    gWallCol = m->field_360_column_words;
++    gmp_col_info* w = Col(gWallCol);
++    gmp_col_info* r = Col(gRoadCol);
++    w->field_1_offset = r->field_1_offset;
++    w->field_0_height = static_cast<u8>(z + 3);
++    for (s32 i = 0; i < r->field_0_height - r->field_1_offset; ++i)
++    {
++        w->field_4_blockd[i] = r->field_4_blockd[i];
++    }
++    w->field_4_blockd[z + 1 - w->field_1_offset] = wallBi;
++    w->field_4_blockd[z + 2 - w->field_1_offset] = wallBi;
++    m->field_360_column_words += w->field_0_height - w->field_1_offset + 1;
++
++    for (s32 y = y0; y < y0 + size; ++y)
++    {
++        for (s32 x = x0; x < x0 + size; ++x)
++        {
++            const s32 i = x - x0, j = y - y0, e = size - 1;
++            const s32 edge = i < j ? (i < e - j ? i : e - j) : (j < e - i ? j : e - i); // distance to the border
++            u32 col = gRoadCol;
++            if (edge == 0)
++            {
++                col = gWallCol;
++            }
++            else if (edge <= 2)
++            {
++                col = gPaveCol; // pavement along the wall
++            }
++            else if ((i % 20) >= 9 && (i % 20) <= 12 && (j % 20) >= 9 && (j % 20) <= 12 && edge > 6)
++            {
++                col = gPaveCol; // 4 x 4 pavement islands every 20 blocks
++            }
++            *d->get_base_42A830(y, x) = col;
++        }
++    }
++    gBuiltFor = d;
++    gBuilt[0] = x0;
++    gBuilt[1] = y0;
++    gBuilt[2] = size;
++    gBuilt[3] = z;
++    return true;
++}
++} // namespace
++
++extern "C" {
++EMSCRIPTEN_KEEPALIVE const s32* gta2_dev_test_area(int x0, int y0, int size)
++{
++    if (Build(x0, y0, size))
++    {
++        gOut[7] = 0;
++        // centre: on road, between the islands
++        x0 = gBuilt[0];
++        y0 = gBuilt[1];
++        size = gBuilt[2];
++        const s32 c = size / 2;
++        gOut[0] = 1;
++        gOut[1] = x0 + c - (c % 20 >= 9 && c % 20 <= 12 ? 4 : 0);
++        gOut[2] = y0 + c;
++        gOut[3] = gBuilt[3];
++        gOut[4] = x0;
++        gOut[5] = y0;
++        gOut[6] = size;
++    }
++    return gOut;
++}
++}
++
++// Debug: objects in a rectangle, [kind (0 live object, 1 map-file entry), model, x, y (Fix16)]
++// each; returns the count.
++extern "C" EMSCRIPTEN_KEEPALIVE int gta2_dev_area_objects(int x0, int y0, int size, s32* out, int max)
++{
++    int n = 0;
++    auto in = [&](s32 x, s32 y) { return x >= x0 * 16384 && x < (x0 + size) * 16384 && y >= y0 * 16384 && y < (y0 + size) * 16384; };
++    if (gObject_2C_Pool_6F8F80)
++    {
++        for (Object_2C& o : gObject_2C_Pool_6F8F80->field_8_pool)
++        {
++            if (o.field_18_model && o.field_4 && in(o.field_4->field_14_xy.x.mValue, o.field_4->field_14_xy.y.mValue) && n < max)
++            {
++                s32* v = out + 4 * n++;
++                v[0] = 0; v[1] = o.field_18_model; v[2] = o.field_4->field_14_xy.x.mValue; v[3] = o.field_4->field_14_xy.y.mValue;
++            }
++        }
++    }
++    Map_0x370* m = gMap_0x370_6F6268;
++    for (u32 i = 0; m && m->field_338_pMapObjects && i < m->field_344_map_object_count; ++i)
++    {
++        const gmp_map_object& mo = m->field_338_pMapObjects[i];
++        const s32 mx = Fix16::ctor_462ED0(mo.field_0_x).mValue, my = Fix16::ctor_462ED0(mo.field_2_y).mValue;
++        if (in(mx, my) && n < max)
++        {
++            s32* v = out + 4 * n++;
++            v[0] = 1; v[1] = mo.field_5_object_type; v[2] = mx; v[3] = my;
++        }
++    }
++    return n;
++}
++
++// Debug: the game's own name of car model `model` (text key "car<model>", as the HUD shows on
++// entering), as ASCII into out (max bytes, NUL-terminated); returns its length, 0 if none.
++extern "C" EMSCRIPTEN_KEEPALIVE int gta2_dev_car_name(int model, char* out, int max)
++{
++    if (!gText_0x14_704DFC || !out || max < 2 || model < 0 || model > 255)
++    {
++        return 0;
++    }
++    char key[16];
++    snprintf(key, sizeof(key), "car%d", model);
++    const wchar_t* w = gText_0x14_704DFC->Find_5B5F90(key);
++    int n = 0;
++    for (; w && w[n] && n < max - 1; ++n)
++    {
++        out[n] = (w[n] >= 32 && w[n] < 127) ? static_cast<char>(w[n]) : '?';
++    }
++    out[n] = 0;
++    return n;
++}
 diff --git a/port/platform/turret_web.cpp b/port/platform/turret_web.cpp
 new file mode 100644
 index 0000000..2115555
@@ -550,7 +999,7 @@ index fc68fc5..ef87b94 100644
  }
  
 diff --git a/scripts/build_port.py b/scripts/build_port.py
-index 31a1e84..cfeb773 100644
+index 31a1e84..c6299c3 100644
 --- a/scripts/build_port.py
 +++ b/scripts/build_port.py
 @@ -53,7 +53,7 @@ LINK = [
@@ -558,7 +1007,7 @@ index 31a1e84..cfeb773 100644
      '-sEXPORT_NAME=createGta2', '-sFORCE_FILESYSTEM=1',
      '-sEXPORTED_RUNTIME_METHODS=FS,HEAPU8,HEAPU16,HEAP32,HEAPF32,HEAPF64,ccall,cwrap',
 -    '-sEXPORTED_FUNCTIONS=_main,_malloc,_free,_gta2_start,_gta2_port_key,_gta2_port_mouse_move,_gta2_port_mouse_button,_gta2_port_release_all_keys,_gta2_port_reg_set_dword,_gta2_port_reg_set_string,_gta2_port_reg_export,_gta2_port_set_language,_gta2_port_input_stats,_gta2_dev_state,_gta2_dev_spawn_car,_gta2_dev_add_cash,_gta2_dev_give_weapon,_gta2_port_set_view_width,_gta2_dev_camera,_gta2_port_set_activation_margin,_gta2_port_set_camera,_gta2_dev_teleport,_gta2_dev_find_road,_gta2_port_map_state,_gta2_port_map_render_rows,_gta2_port_set_paused,_gta2_port_map_objects,_gta2_dev_object_models,_gta2_port_map_triggers,_gta2_port_map_gangs,_gta2_port_map_arrows,_gta2_port_set_hud_arrows,_gta2_port_sprite_rgba,_gta2_port_set_hud_edges,_gta2_dev_unlock_areas,_gta2_dev_set_respect,_gta2_dev_spawn_truck,_gta2_dev_truck_state,_gta2_port_set_interpolation,_gta2_dev_drawn_camera,_gta2_port_net_configure,_gta2_port_net_set_name,_gta2_port_net_receive,_gta2_port_net_peer_left,_gta2_port_net_set_map,_gta2_port_run_slice,_gta2_port_net_debug,_gta2_dev_sync_state,_gta2_dev_sync_history,_gta2_dev_sync_dump,_gta2_dev_sync_peds,_gta2_port_coop_players,_gta2_port_take_frame_ms,_gta2_port_set_friendly_fire,_gta2_port_net_set_rules,_gta2_port_set_player_team,_gta2_dev_test_friendly_fire,_gta2_dev_gang_respect,_gta2_port_set_ride_together,_gta2_dev_seat_player_driver,_gta2_dev_car_occupants,_gta2_dev_ride_check,_gta2_dev_ped_entry,_gta2_port_savestate_can_save,_gta2_port_savestate_prepare,_gta2_port_savestate_reserve,_gta2_port_savestate_restored,_gta2_port_savestate_label,_gta2_port_savestate_rules,_gta2_port_savestate_pay,_gta2_port_job_briefs,_gta2_port_reload_controls',
-+    '-sEXPORTED_FUNCTIONS=_main,_malloc,_free,_gta2_start,_gta2_port_key,_gta2_port_mouse_move,_gta2_port_mouse_button,_gta2_port_release_all_keys,_gta2_port_reg_set_dword,_gta2_port_reg_set_string,_gta2_port_reg_export,_gta2_port_set_language,_gta2_port_input_stats,_gta2_dev_state,_gta2_dev_spawn_car,_gta2_dev_add_cash,_gta2_dev_give_weapon,_gta2_port_set_view_width,_gta2_dev_camera,_gta2_port_set_activation_margin,_gta2_port_set_camera,_gta2_dev_teleport,_gta2_dev_find_road,_gta2_dev_find_open,_gta2_port_set_steer_target,_gta2_port_set_steer_params,_gta2_port_set_steer_ramp,_gta2_port_steer_debug,_gta2_port_set_camera_lead,_gta2_port_set_steer_grip,_gta2_port_set_throttle,_gta2_port_set_turret_target,_gta2_port_turret_state,_gta2_port_set_hud_inset,_gta2_port_map_state,_gta2_port_map_render_rows,_gta2_port_set_paused,_gta2_port_map_objects,_gta2_dev_object_models,_gta2_port_map_triggers,_gta2_port_map_gangs,_gta2_port_map_arrows,_gta2_port_set_hud_arrows,_gta2_port_sprite_rgba,_gta2_port_set_hud_edges,_gta2_dev_unlock_areas,_gta2_dev_set_respect,_gta2_dev_spawn_truck,_gta2_dev_truck_state,_gta2_port_set_interpolation,_gta2_dev_drawn_camera,_gta2_port_net_configure,_gta2_port_net_set_name,_gta2_port_net_receive,_gta2_port_net_peer_left,_gta2_port_net_set_map,_gta2_port_run_slice,_gta2_port_net_debug,_gta2_dev_sync_state,_gta2_dev_sync_history,_gta2_dev_sync_dump,_gta2_dev_sync_peds,_gta2_port_coop_players,_gta2_port_take_frame_ms,_gta2_port_set_friendly_fire,_gta2_port_net_set_rules,_gta2_port_set_player_team,_gta2_dev_test_friendly_fire,_gta2_dev_gang_respect,_gta2_port_set_ride_together,_gta2_dev_seat_player_driver,_gta2_dev_car_occupants,_gta2_dev_ride_check,_gta2_dev_ped_entry,_gta2_port_savestate_can_save,_gta2_port_savestate_prepare,_gta2_port_savestate_reserve,_gta2_port_savestate_restored,_gta2_port_savestate_label,_gta2_port_savestate_rules,_gta2_port_savestate_pay,_gta2_port_job_briefs,_gta2_port_reload_controls',
++    '-sEXPORTED_FUNCTIONS=_main,_malloc,_free,_gta2_start,_gta2_port_key,_gta2_port_mouse_move,_gta2_port_mouse_button,_gta2_port_release_all_keys,_gta2_port_reg_set_dword,_gta2_port_reg_set_string,_gta2_port_reg_export,_gta2_port_set_language,_gta2_port_input_stats,_gta2_dev_state,_gta2_dev_spawn_car,_gta2_dev_add_cash,_gta2_dev_give_weapon,_gta2_port_set_view_width,_gta2_dev_camera,_gta2_port_set_activation_margin,_gta2_port_set_camera,_gta2_dev_teleport,_gta2_dev_find_road,_gta2_dev_find_open,_gta2_dev_test_area,_gta2_dev_spawn_car_near,_gta2_dev_car_name,_gta2_dev_area_objects,_gta2_port_set_steer_target,_gta2_port_set_steer_params,_gta2_port_set_steer_ramp,_gta2_port_steer_debug,_gta2_port_set_camera_lead,_gta2_port_set_steer_grip,_gta2_port_set_throttle,_gta2_port_set_turret_target,_gta2_port_turret_state,_gta2_port_set_hud_inset,_gta2_port_map_state,_gta2_port_map_render_rows,_gta2_port_set_paused,_gta2_port_map_objects,_gta2_dev_object_models,_gta2_port_map_triggers,_gta2_port_map_gangs,_gta2_port_map_arrows,_gta2_port_set_hud_arrows,_gta2_port_sprite_rgba,_gta2_port_set_hud_edges,_gta2_dev_unlock_areas,_gta2_dev_set_respect,_gta2_dev_spawn_truck,_gta2_dev_truck_state,_gta2_port_set_interpolation,_gta2_dev_drawn_camera,_gta2_port_net_configure,_gta2_port_net_set_name,_gta2_port_net_receive,_gta2_port_net_peer_left,_gta2_port_net_set_map,_gta2_port_run_slice,_gta2_port_net_debug,_gta2_dev_sync_state,_gta2_dev_sync_history,_gta2_dev_sync_dump,_gta2_dev_sync_peds,_gta2_port_coop_players,_gta2_port_take_frame_ms,_gta2_port_set_friendly_fire,_gta2_port_net_set_rules,_gta2_port_set_player_team,_gta2_dev_test_friendly_fire,_gta2_dev_gang_respect,_gta2_port_set_ride_together,_gta2_dev_seat_player_driver,_gta2_dev_car_occupants,_gta2_dev_ride_check,_gta2_dev_ped_entry,_gta2_port_savestate_can_save,_gta2_port_savestate_prepare,_gta2_port_savestate_reserve,_gta2_port_savestate_restored,_gta2_port_savestate_label,_gta2_port_savestate_rules,_gta2_port_savestate_pay,_gta2_port_job_briefs,_gta2_port_reload_controls',
  ]
  
  

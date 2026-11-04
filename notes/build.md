@@ -37,11 +37,14 @@ re-creates the core from the patches, so the core's history is ours to rewrite.
   `_steer_debug` (12 ints); `Gta2Port_SteerOverride` / `Gta2Port_SteerScale` /
   `Gta2Port_SteerAssistOff` / `Gta2Port_NoteSteerAssist` called from patch 0027,
   `Gta2Port_ThrottleCap` from 0028 (see `notes/engine.md`, Cars).
+- `port/platform/test_area_web.cpp` — `gta2_dev_test_area`, `gta2_dev_area_objects`,
+  `gta2_dev_car_name` (dev hooks, no gta2_re patch; see `notes/engine.md` and
+  `notes/reference.md`).
 - `port/platform/turret_web.cpp` — `gta2_port_set_turret_target`, `gta2_port_turret_state`;
   `Gta2Port_TurretOverride` called from patch 0029 (see `notes/engine.md`, Cars).
 - `port/platform/mobile_camera_web.cpp` — `gta2_port_set_camera_lead(k, max)` (the camera
   itself is pinned to its target in patch 0026).
-- `port/platform/dev_hooks.cpp` — `gta2_dev_*` (`find_open` is ours).
+- `port/platform/dev_hooks.cpp` — `gta2_dev_*` (`find_open` and `spawn_car_near` are ours).
 - `port/platform/frame.cpp` — `gta2_port_set_hud_inset`.
 - `port/platform/vid_web.cpp` — `gta2_port_set_camera` modes 0/1/2.
 - `web/shell.js`, `web/landing.js` — 3-mode camera button / option.
@@ -84,5 +87,9 @@ re-creates the core from the patches, so the core's history is ours to rewrite.
   reproduced 3e0b55df but rewrote every `?v=` hash in the root JS (`git checkout -- .`).
   New port files must be `git add -N`'d in `<work>/gta2-browser` before regenerating
   `engine/port-web.patch` (`git diff -- port/platform port/render scripts web`).
+- 2026-11-04: ten rebuilds for one feature left seven unpublished archives in `old/` and in
+  both work-dir `old/` folders; deleted in all three before the commit (the rule above).
+  Port-only changes (a new `port/platform/*.cpp`) need no gta2_re patch: add the exports to
+  `scripts/build_port.py`, `git add -N` the file, regenerate `engine/port-web.patch`.
 - The core's commit hashes change on every `--prepare` (the core is re-created from the
   patches): take the hash to `--fixup` from `git log` at that moment, never from a note.

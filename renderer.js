@@ -10,7 +10,7 @@
 // 640 for menus and other 4:3 screens (pillarboxed), or the widescreen view
 // width for gameplay frames.
 
-import { registerDict, t } from './strings.js?v=cb269e5e6c';
+import { registerDict, t } from './strings.js?v=26371eb61b';
 
 registerDict({
   en: {

@@ -2,10 +2,10 @@
 // friends, the controls on a drawn keyboard, options and help. Layout in the
 // spirit of browser-game launchers such as Eaglercraft's; our own code and style.
 
-import { LOAD_KEY, SAVE_KEY, money, num } from './savestate.js?v=cb269e5e6c';
-import { describe } from './saves.js?v=cb269e5e6c';
-import { findPad, listPads, padName } from './gamepad.js?v=cb269e5e6c';
-import { lang, onLangChange, registerDict, setLang, t } from './strings.js?v=cb269e5e6c';
+import { LOAD_KEY, SAVE_KEY, money, num } from './savestate.js?v=26371eb61b';
+import { describe } from './saves.js?v=26371eb61b';
+import { findPad, listPads, padName } from './gamepad.js?v=26371eb61b';
+import { lang, onLangChange, registerDict, setLang, t } from './strings.js?v=26371eb61b';
 
 registerDict({
   en: {
