@@ -304,7 +304,7 @@
   // engine turns it at the tank's own turret speed and keeps it on that world heading while
   // the hull turns (engine patch 0029, port/platform/turret_web.cpp). The marker on the ring is
   // the turret's actual direction.
-  const TURRET_INNER = 36; // px: inner disc radius (fires); the ring goes out to the button's edge
+  const TURRET_INNER = 31; // px: inner disc radius (fires); the ring goes out to the button's edge
   let turretOn = false; // driving a tank whose turret the engine can aim
   let turretPointer = null;
   let turretSent = -1;

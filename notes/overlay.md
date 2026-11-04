@@ -33,7 +33,7 @@ Design decisions and mechanics of `mobile.js` / `mobile.css` / `autostart.js` / 
 
 - **Tank: Fire's turret ring** (`turretTick`, `turretRingDown`): while driving a tank
   (`gta2_port_turret_state()[0]`) Fire grows to 124 px around the same centre (`.is-turret`):
-  the inner disc (radius `TURRET_INNER` 36 px, dashed) fires as before; a touch on the ring, or a
+  the inner disc (radius `TURRET_INNER` 31 px, dashed; was 36, ring too thin) fires as before; a touch on the ring, or a
   drag along it, sends the turret toward that direction on screen (`gta2_port_set_turret_target`,
   same angle convention as the stick) without firing; the yellow mark on the ring is the
   turret's actual direction, per frame. The turret then holds that world heading while the hull
