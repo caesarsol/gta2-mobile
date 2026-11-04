@@ -175,9 +175,9 @@ html.gta-rotate #gtaReload {
 }
 
 /* ---- Bottom-left: fixed joystick ----
-   Base is 260px (radius 130 = knob clamp). The solid ring marks the dead zone used by
-   mobile.js (20px), the dashed one the aim ring (on foot: turn only, 60px). Reverse is by
-   direction, not distance. */
+   Base is 260px (radius 130 = knob clamp = full gas in a car). The solid ring marks the dead
+   zone used by mobile.js on foot (20px; none in a car), the dashed one the aim ring (on foot:
+   turn only, 60px). Reverse is by direction, not distance. */
 #gtaStick {
   --stick-size: 260px;
   position: absolute;
@@ -221,17 +221,14 @@ html.gta-rotate #gtaReload {
 #gtaMobile[data-mode='menu'] .gta-ring-aim {
   display: none;
 }
-/* In a car: the dotted throttle ring (Tune throttleFull = full gas) and the throttle fan, a wedge
-   from the centre toward the thumb as long as the gas it gives (mobile.js updateStick).
-   Both only while the feature is on (data-throttle='1'); the fan only while the stick is out. */
-.gta-ring-throttle,
-.gta-throttle-fan {
+/* In a car: no dead zone (the gas starts at the centre), so no dead-zone ring; the throttle fan, a
+   wedge from the centre to the thumb up to the stick's edge = full gas (mobile.js updateStick).
+   The fan only while the feature is on (data-throttle='1') and the stick is out. */
+#gtaStick[data-vehicle='1'] .gta-ring-move {
   display: none;
 }
-#gtaStick[data-vehicle='1'][data-throttle='1'] .gta-ring-throttle {
-  display: block;
-  border-style: dotted;
-  border-color: rgba(255, 196, 0, 0.6);
+.gta-throttle-fan {
+  display: none;
 }
 #gtaStick[data-vehicle='1'][data-throttle='1'][data-gear='aim'] .gta-throttle-fan,
 #gtaStick[data-vehicle='1'][data-throttle='1'][data-gear='move'] .gta-throttle-fan {

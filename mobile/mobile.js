@@ -114,7 +114,6 @@
   root.innerHTML = `
     <div id="gtaStick">
       <div class="gta-ring gta-ring-aim"></div>
-      <div class="gta-ring gta-ring-throttle"></div>
       <div class="gta-throttle-fan"></div>
       <div class="gta-ring gta-ring-move"></div>
       <div id="gtaHeading">
@@ -381,7 +380,7 @@
   const TUNE_KEY = 'gta2-mobile:tune';
   const TUNE_DEFS = [
     { k: 'ringMove', label: 'Joystick · dead zone (px)', def: 20, step: 2, min: 6, max: 60,
-      help: 'Dead zone radius. Inside it the stick does nothing; beyond it you turn (on foot) or drive.' },
+      help: 'On foot and in menus: dead zone radius. Inside it the stick does nothing; beyond it you turn. Cars have none: the gas starts at the centre.' },
     { k: 'ringAim', label: 'Joystick · aim ring (px)', def: 60, step: 5, min: 20, max: 120,
       help: 'On foot, between the dead zone and this radius you only turn on the spot (to aim and shoot); beyond it you also walk. In cars any distance drives.' },
     { k: 'turnStart', label: 'Turn · start (°)', def: 5, step: 1, min: 1, max: 30,
@@ -396,8 +395,8 @@
       help: 'Cars: GTA2 itself steers at full lock only, which slides at speed. Within this angle of the stick direction the wheel angle is reduced (square root of the remaining error), full lock beyond it and at low speed. 0 = always full lock (jabs and slides).' },
     { k: 'steerGrip', label: 'Steer · grip (%)', def: 100, step: 10, min: 0, max: 100,
       help: 'Cars: every tick the car\'s velocity is turned onto its heading by this much. 100 = GTA1-style, the car never slides and goes exactly where it points, keeping its speed through turns. 0 = GTA2\'s own physics (skids at speed). The tank always gets 0 (it gets stuck at a standstill otherwise), and every car gets 0 while the handbrake is held (handbrake slides).' },
-    { k: 'throttleFull', label: 'Throttle · full at (px)', def: 110, step: 10, min: 0, max: 130,
-      help: 'Cars: the stick distance is the gas pedal. Between the dead zone and this radius the engine\'s pedal is capped in proportion (a little way out = gentle, this far = full). 0 = always full gas, as before.' },
+    { k: 'throttle', label: 'Throttle · by distance', def: 1, step: 1, min: 0, max: 1, bool: true,
+      help: 'Cars: the stick distance is the gas pedal, from none at the centre to full at the edge of the stick (the engine\'s pedal is capped in proportion). false = always full gas, as before.' },
     { k: 'charts', label: 'Charts · show', def: 0, step: 1, min: 0, max: 1, bool: true,
       help: 'Cars: live charts of the steering (error, yaw rate, lock, road assist) and grip (slip, lateral speed, speed, pedal, skid) over the last 8 s of motion; they freeze when you stop. Also the chart pill in the top bar.' },
     { k: 'revEnter', label: 'Reverse · enter (°)', def: 130, step: 5, min: 90, max: 180,
@@ -429,7 +428,12 @@
     try { localStorage.setItem(TUNE_KEY, JSON.stringify(changed)); } catch { /* ignore */ }
   }
   loadTune();
-  const KNOB_MAX = 130; // px: knob travel clamp (visual only)
+  const KNOB_MAX = 130; // px: the stick's radius: knob travel clamp, full gas in a car
+  // Dead zone: on foot and in menus ringMove; none in a car (the gas starts at the centre), only
+  // the exact centre, where there is no direction.
+  const CAR_DEAD_ZONE = 1;
+  const inCarNow = () => { const s = live(); return !!(s && s.hasPlayer && s.inCar) && mode !== 'menu'; };
+  const deadZone = () => (inCarNow() ? CAR_DEAD_ZONE : T.ringMove);
   const deg = (d) => (d * Math.PI) / 180;
   //
   // Engine conventions (web/map.js state(): heading a, direction (sin a, cos a)
@@ -500,7 +504,7 @@
     if (stickId === null || root.hidden || root.dataset.screen) return;
     if (mode === 'menu' || !s || !s.hasPlayer) { menuTick(); return; }
 
-    if (stickDist < T.ringMove) {
+    if (stickDist < deadZone()) {
       releaseHeld();
       setSteerTarget(-1);
       setThrottle(256);
@@ -584,8 +588,8 @@
     setHeld('KeyA', false);
     setHeld('KeyD', false);
     setSteerTarget(Math.round((((target % TAU) + TAU) % TAU) / TAU * 1440) % 1440);
-    // The stick distance is the gas pedal: the engine's analog pedal is capped in proportion
-    // between the dead zone and throttleFull (engine patch 0028); 0 = always full.
+    // The stick distance is the gas pedal: the engine's analog pedal is capped in proportion,
+    // none at the centre, full at the stick's edge (engine patch 0028).
     setThrottle(Math.round(256 * throttleFrac(stickDist)));
     setHeld('KeyW', !reversing);
     setHeld('KeyS', reversing);
@@ -635,11 +639,10 @@
     if (!g || !g.Module) return;
     try { g.Module.ccall('gta2_port_set_steer_target', null, ['number'], [units]); steerSent = units; } catch { /* older engine */ }
   }
-  // Gas fraction for a stick distance: 0 at the dead zone, 1 at throttleFull (1 everywhere when
-  // throttleFull is 0 or inside the dead zone = the feature is off).
+  // Gas fraction for a stick distance: 0 at the centre, 1 at the stick's edge (1 everywhere when
+  // the feature is off).
   function throttleFrac(dist) {
-    const span = T.throttleFull - T.ringMove;
-    return span > 0 ? Math.min(1, Math.max(0, (dist - T.ringMove) / span)) : 1;
+    return T.throttle ? Math.min(1, dist / KNOB_MAX) : 1;
   }
   // The gas pedal cap (0..256 of the full pedal; 256 = no cap). Sent only on change.
   let throttleSent = 256;
@@ -661,10 +664,10 @@
     stickDx = dx;
     stickDy = dy;
     stickDist = dist;
-    // Throttle fan (cars): a wedge from the centre toward the thumb, as long as the gas it gives
-    // (dead zone → throttleFull ring). CSS conic angles are clockwise from up.
+    // Throttle fan (cars): a wedge from the centre to the thumb, up to the stick's edge (= full
+    // gas, so its length is the gas). CSS conic angles are clockwise from up.
     if (dist > 0) {
-      const len = T.ringMove + throttleFrac(dist) * Math.max(0, T.throttleFull - T.ringMove);
+      const len = Math.min(dist, KNOB_MAX);
       const ang = (Math.atan2(dx, -dy) * 180) / Math.PI;
       fan.style.width = fan.style.height = `${Math.round(len * 2)}px`;
       fan.style.background = `conic-gradient(from ${(ang - 14).toFixed(1)}deg, rgba(255, 196, 0, 0.45) 0 28deg, transparent 28deg 360deg)`;
@@ -674,7 +677,7 @@
       dy = (dy / dist) * KNOB_MAX;
     }
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    stick.dataset.gear = dist < T.ringMove ? 'idle' : dist < T.ringAim ? 'aim' : 'move';
+    stick.dataset.gear = dist < deadZone() ? 'idle' : dist < T.ringAim ? 'aim' : 'move';
   }
 
   function endStick() {
@@ -698,9 +701,7 @@
     move.style.width = move.style.height = `${T.ringMove * 2}px`;
     const aim = root.querySelector('.gta-ring-aim');
     aim.style.width = aim.style.height = `${T.ringAim * 2}px`;
-    const thr = root.querySelector('.gta-ring-throttle');
-    thr.style.width = thr.style.height = `${T.throttleFull * 2}px`;
-    stick.dataset.throttle = T.throttleFull > T.ringMove ? '1' : '0';
+    stick.dataset.throttle = T.throttle ? '1' : '0';
     const a = root.querySelector('.gta-rev-line-a');
     const b = root.querySelector('.gta-rev-line-b');
     const sec = root.querySelector('.gta-rev-sector');

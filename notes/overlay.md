@@ -13,17 +13,19 @@ Design decisions and mechanics of `mobile.js` / `mobile.css` / `autostart.js` / 
   **walks once within `walkStart`** (45°; 20° made it stop and turn too often) of the direction,
   stopping again beyond 2× (hysteresis).
   Turning uses the measured hold→tap controller (`notes/engine.md`, On foot).
-- **In a car**: any distance beyond the dead zone drives; the engine steers
+- **In a car**: no dead zone (`deadZone()`: 1 px, only the exact centre has no direction; the
+  dead-zone ring is hidden); the engine steers
   (`setSteerTarget`, soft zone `steerSoft` → `gta2_port_set_steer_ramp`, grip `steerGrip` →
   `gta2_port_set_steer_grip`; 0 in the tank and while the Brake button is held, `gripNow()`), the overlay holds W or S. Pointing more than `revEnter` (130°) behind the
   car = reverse (exit below `revExit`, 100°), drawn as the red sector; A/D are flipped in reverse.
-  **Throttle**: the distance between the dead zone and `throttleFull` (110 px; 0 = off) caps the
+  **Throttle** (Tune `throttle`, on by default): the distance from the centre to the stick's edge
+  (`KNOB_MAX`, 130 px = the base's radius) caps the
   engine's gas pedal in proportion (`setThrottle` → `gta2_port_set_throttle`, 0..256; 256 whenever
   the stick is idle / released / on foot). The pedal is a 3:1 range of engine force, not of
-  speed (`notes/engine.md`, Cars). Shown on the stick: a dotted yellow ring at `throttleFull`
-  and a **throttle fan**, a 28° wedge from the centre toward the thumb as long as the gas it
-  gives (`.gta-throttle-fan`, a conic gradient sized in `updateStick`; CSS conic angles are
-  clockwise from up = `atan2(dx, −dy)`). Both only in a car with the feature on.
+  speed (`notes/engine.md`, Cars). Shown on the stick: a **throttle fan**, a 28° wedge from the
+  centre to the thumb, up to the edge (= the gas it gives; `.gta-throttle-fan`, a conic gradient
+  sized in `updateStick`; CSS conic angles are clockwise from up = `atan2(dx, −dy)`). Only in a
+  car with the feature on. The knob's centre stops on the edge (`KNOB_MAX`).
 - Rejected / removed: a JS-side predictive release for cars (replaced by the engine override),
   damping code (the user asked to remove it).
 
@@ -159,3 +161,6 @@ from muting Web Audio with the ringer switch.
   the pill is `#gtaChartsBtn`.
 - The charts box must stay clear of the round buttons (right: safe area + 200 px) and the
   stick (left: safe area + 290 px): checked on the 844×390 screenshot.
+- 2026-11-04: the throttle fan stopping at the dotted `throttleFull` ring (110 px of 130) read as
+  a truncated wedge, and the 20 px dead zone as a pointless inner ring. Cars now have no dead
+  zone and full gas at the stick's edge: the fan always reaches the thumb.
