@@ -354,6 +354,56 @@ html.gta-rotate #gtaReload {
   font-size: 15px;
   border-color: rgba(255, 80, 60, 0.7);
 }
+/* In the tank Fire grows an outer ring that aims the turret (mobile.js turretTick): same centre,
+   124 px; the inner disc (radius TURRET_INNER = 36 px, dashed) fires, the ring around it sends the
+   turret toward the touch; the yellow mark is the turret's actual direction. */
+.gta-btn-fire.is-turret {
+  right: calc(var(--pad-r) - 6px);
+  bottom: calc(var(--pad-b) + 48px);
+  width: 124px;
+  height: 124px;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.6) 0 35px, rgba(255, 196, 0, 0.12) 36px);
+}
+.gta-btn-fire.is-turret::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 80, 60, 0.7);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.gta-btn-fire.is-turret.is-down {
+  background: radial-gradient(circle, rgba(255, 196, 0, 0.9) 0 35px, rgba(255, 196, 0, 0.12) 36px);
+}
+.gta-btn-fire.is-turret.is-aiming {
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.6) 0 35px, rgba(255, 196, 0, 0.3) 36px);
+  border-color: #ffc400;
+}
+.gta-btn-fire.is-turret .gta-fire-label {
+  font-size: 12px;
+}
+.gta-turret-mark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.gta-turret-mark[hidden] {
+  display: none;
+}
+.gta-turret-mark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  border: 9px solid transparent;
+  border-top: 0;
+  border-bottom: 16px solid #ffc400;
+  transform: translateX(-50%);
+}
 .gta-btn-enter {
   right: calc(var(--pad-r) + 112px);
   bottom: calc(var(--pad-b) + 10px);

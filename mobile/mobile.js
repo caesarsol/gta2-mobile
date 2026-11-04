@@ -127,7 +127,7 @@
     </div>
     <div id="gtaStickZone"></div>
 
-    <button type="button" class="gta-btn gta-btn-fire" data-key="KeyL" id="gtaFire">Fire</button>
+    <button type="button" class="gta-btn gta-btn-fire" data-key="KeyL" id="gtaFire"><span class="gta-fire-label">Fire</span><span class="gta-turret-mark" hidden></span></button>
     <button type="button" class="gta-btn gta-btn-enter" data-key="Enter" id="gtaEnter">Enter</button>
     <button type="button" class="gta-btn gta-btn-jump" data-key="Space" data-menu-key="Escape" id="gtaJump">Jump</button>
 
@@ -223,6 +223,7 @@
     btn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       btn.setPointerCapture(e.pointerId);
+      if (btn.id === 'gtaFire' && turretRingDown(e)) return; // the tank's turret ring, not a shot
       btn.classList.add('is-down');
       code = mode === 'menu' && btn.dataset.menuKey ? btn.dataset.menuKey : btn.dataset.key;
       press(code);
@@ -290,6 +291,76 @@
       /* iOS Safari (iPhone) has no Fullscreen API: install as PWA instead */
     }
   });
+
+  // ---------- Tank turret: Fire's outer ring ----------
+  // In the tank Fire grows an outer ring: a touch inside the inner disc fires as usual, a touch
+  // on the ring (or a drag along it) sends the turret toward that direction on screen. The
+  // engine turns it at the tank's own turret speed and keeps it on that world heading while
+  // the hull turns (engine patch 0029, port/platform/turret_web.cpp). The marker on the ring is
+  // the turret's actual direction.
+  const TURRET_INNER = 36; // px: inner disc radius (fires); the ring goes out to the button's edge
+  let turretOn = false; // driving a tank whose turret the engine can aim
+  let turretPointer = null;
+  let turretSent = -1;
+  function setTurretTarget(units) {
+    if (units === turretSent) return;
+    const g = G();
+    if (!g || !g.Module) return;
+    try { g.Module.ccall('gta2_port_set_turret_target', null, ['number'], [units]); turretSent = units; } catch { /* older engine */ }
+  }
+  function turretState() {
+    const g = G();
+    if (!g || !g.Module) return null;
+    try {
+      const M = g.Module; const p = M.ccall('gta2_port_turret_state', 'number', [], []);
+      return M.HEAP32.subarray(p >> 2, (p >> 2) + 4);
+    } catch { return null; }
+  }
+  // Touch → (dx, dy) from Fire's centre in the page frame (forced landscape: see updateStick).
+  function fireDelta(e) {
+    const r = fireBtnEl.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    if (rotation === 1) [dx, dy] = [dy, -dx];
+    else if (rotation === -1) [dx, dy] = [-dy, dx];
+    return [dx, dy];
+  }
+  function aimTurret(e) {
+    const [dx, dy] = fireDelta(e);
+    const a = Math.atan2(-dy, dx) + Math.PI / 2; // same convention as the stick: a = π is screen-up
+    setTurretTarget(Math.round((((a % TAU) + TAU) % TAU) / TAU * 1440) % 1440);
+  }
+  function turretRingDown(e) {
+    if (!turretOn || mode !== 'play') return false;
+    const [dx, dy] = fireDelta(e);
+    if (Math.hypot(dx, dy) <= TURRET_INNER) return false;
+    turretPointer = e.pointerId;
+    fireBtnEl.classList.add('is-aiming');
+    aimTurret(e);
+    return true;
+  }
+  const fireBtnEl = root.querySelector('#gtaFire');
+  const turretMark = fireBtnEl.querySelector('.gta-turret-mark');
+  fireBtnEl.addEventListener('pointermove', (e) => { if (e.pointerId === turretPointer) aimTurret(e); });
+  const turretUp = (e) => { if (e.pointerId !== turretPointer) return; turretPointer = null; fireBtnEl.classList.remove('is-aiming'); };
+  fireBtnEl.addEventListener('pointerup', turretUp);
+  fireBtnEl.addEventListener('pointercancel', turretUp);
+  // Per frame: ring on/off with the tank, the marker at the turret's direction.
+  function turretTick() {
+    const st = devState && devState.inCar && !root.hidden ? turretState() : null;
+    const on = !!(st && st[0]);
+    if (on !== turretOn) {
+      turretOn = on;
+      fireBtnEl.classList.toggle('is-turret', on);
+      turretMark.hidden = !on;
+      if (!on) { setTurretTarget(-1); turretPointer = null; fireBtnEl.classList.remove('is-aiming'); }
+    }
+    if (on) {
+      // world heading a → CSS rotation clockwise from up (a = π is up), as the heading arrow
+      const d = (-(st[1] / 1440 * TAU - Math.PI) * 180) / Math.PI;
+      turretMark.style.transform = `rotate(${d.toFixed(1)}deg)`;
+    }
+  }
 
   // ---------- Fixed joystick, absolute direction ----------
   //
@@ -796,6 +867,7 @@
     updateHeadingIndicator();
     camTick();
     chartsTick();
+    turretTick();
     requestAnimationFrame(loop);
   })();
 

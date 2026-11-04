@@ -29,6 +29,16 @@ Design decisions and mechanics of `mobile.js` / `mobile.css` / `autostart.js` / 
 
 ## Buttons and pills
 
+- **Tank: Fire's turret ring** (`turretTick`, `turretRingDown`): while driving a tank
+  (`gta2_port_turret_state()[0]`) Fire grows to 124 px around the same centre (`.is-turret`):
+  the inner disc (radius `TURRET_INNER` 36 px, dashed) fires as before; a touch on the ring, or a
+  drag along it, sends the turret toward that direction on screen (`gta2_port_set_turret_target`,
+  same angle convention as the stick) without firing; the yellow mark on the ring is the
+  turret's actual direction, per frame. The turret then holds that world heading while the hull
+  turns; the target is cleared (−1) when leaving the tank. The ring's left edge just touches
+  Brake (checked at 844×390). Verified headless, landscape and forced landscape: ring up →
+  turret 720 (up), no ammo used; drag right → down → target 0; centre tap fires (200 → 190).
+
 - Right: Fire (L), Enter/Exit (Enter), Jump/Brake (Space). In menu mode (no player yet, game
   over) the stick is a d-pad, Enter = OK, Jump = Esc. In an **unarmed car** Fire and the weapon
   pills are hidden (`canFire`: weapon idx ≥ 15).
