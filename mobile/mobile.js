@@ -347,7 +347,17 @@
   }
   const fireBtnEl = root.querySelector('#gtaFire');
   const turretMark = fireBtnEl.querySelector('.gta-turret-mark');
-  fireBtnEl.addEventListener('pointermove', (e) => { if (e.pointerId === turretPointer) aimTurret(e); });
+  // A finger that pressed Fire (inner disc) and slides out onto the ring starts aiming too; the
+  // shot key stays held until it lifts (pointer capture keeps the moves on Fire).
+  fireBtnEl.addEventListener('pointermove', (e) => {
+    if (e.pointerId === turretPointer) { aimTurret(e); return; }
+    if (turretPointer !== null || !turretOn || mode !== 'play' || !fireBtnEl.classList.contains('is-down')) return;
+    const [dx, dy] = fireDelta(e);
+    if (Math.hypot(dx, dy) <= TURRET_INNER) return;
+    turretPointer = e.pointerId;
+    fireBtnEl.classList.add('is-aiming');
+    aimTurret(e);
+  });
   const turretUp = (e) => { if (e.pointerId !== turretPointer) return; turretPointer = null; fireBtnEl.classList.remove('is-aiming'); };
   fireBtnEl.addEventListener('pointerup', turretUp);
   fireBtnEl.addEventListener('pointercancel', turretUp);
