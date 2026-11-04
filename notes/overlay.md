@@ -15,7 +15,7 @@ Design decisions and mechanics of `mobile.js` / `mobile.css` / `autostart.js` / 
   Turning uses the measured hold→tap controller (`notes/engine.md`, On foot).
 - **In a car**: any distance beyond the dead zone drives; the engine steers
   (`setSteerTarget`, soft zone `steerSoft` → `gta2_port_set_steer_ramp`, grip `steerGrip` →
-  `gta2_port_set_steer_grip`; always 0 in the tank, `gripNow()`), the overlay holds W or S. Pointing more than `revEnter` (130°) behind the
+  `gta2_port_set_steer_grip`; 0 in the tank and while the Brake button is held, `gripNow()`), the overlay holds W or S. Pointing more than `revEnter` (130°) behind the
   car = reverse (exit below `revExit`, 100°), drawn as the red sector; A/D are flipped in reverse.
   **Throttle**: the distance between the dead zone and `throttleFull` (110 px; 0 = off) caps the
   engine's gas pedal in proportion (`setThrottle` → `gta2_port_set_throttle`, 0..256; 256 whenever

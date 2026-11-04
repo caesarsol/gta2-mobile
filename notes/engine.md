@@ -118,6 +118,12 @@ from `gta2_re` (`Source/*.cpp`, in this sandbox under
   Exact mechanism not traced (heavy + little thrust vs the per-tick realignment). The overlay
   sends grip 0 while driving the tank (`NO_GRIP_MODELS`); a speed fade-in (0 below 0.02–0.03,
   full above, emulated from JS) also cured it but was not chosen.
+- **No grip while the handbrake is held** (overlay, `gripNow()`: the Brake button = Space in
+  `down`): GTA2's handbrake slides come back. Measured 2026-11-04, model 25 on the long road,
+  handbrake + stick 40° for 1.5 s: overlay press → slip up to 24° held for ~0.6 s, heading
+  overshoots to 51°; the same Space sent raw (overlay unaware, grip 100) → slip ≤ 3°, heading
+  stops at 41°. (Entry speeds differed, 0.41 vs 0.21: a qualitative check.) A real keyboard
+  Space does not switch the grip off (only the overlay's own presses are tracked).
 - **Jitter a few degrees off a road's axis = the override fighting GTA2's road steer assist**
   (measured 2026-11-02, Z-Type on the long road, stick at axis + 5°, Tune defaults and grip 0
   alike): the car never holds 5°; it sits at 0.8–2° and the heading cycles 0.8 → 2 → 1.3 → 1 →

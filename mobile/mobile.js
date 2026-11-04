@@ -317,7 +317,7 @@
     { k: 'steerSoft', label: 'Steer · soft zone (°)', def: 30, step: 5, min: 0, max: 90,
       help: 'Cars: GTA2 itself steers at full lock only, which slides at speed. Within this angle of the stick direction the wheel angle is reduced (square root of the remaining error), full lock beyond it and at low speed. 0 = always full lock (jabs and slides).' },
     { k: 'steerGrip', label: 'Steer · grip (%)', def: 100, step: 10, min: 0, max: 100,
-      help: 'Cars: every tick the car\'s velocity is turned onto its heading by this much. 100 = GTA1-style, the car never slides and goes exactly where it points, keeping its speed through turns. 0 = GTA2\'s own physics (skids at speed). The tank always gets 0 (it gets stuck at a standstill otherwise).' },
+      help: 'Cars: every tick the car\'s velocity is turned onto its heading by this much. 100 = GTA1-style, the car never slides and goes exactly where it points, keeping its speed through turns. 0 = GTA2\'s own physics (skids at speed). The tank always gets 0 (it gets stuck at a standstill otherwise), and every car gets 0 while the handbrake is held (handbrake slides).' },
     { k: 'throttleFull', label: 'Throttle · full at (px)', def: 110, step: 10, min: 0, max: 130,
       help: 'Cars: the stick distance is the gas pedal. Between the dead zone and this radius the engine\'s pedal is capped in proportion (a little way out = gentle, this far = full). 0 = always full gas, as before.' },
     { k: 'charts', label: 'Charts · show', def: 0, step: 1, min: 0, max: 1, bool: true,
@@ -524,10 +524,12 @@
   let steerParamsSent = '';
   // Grip (%) to send now. The tank gets none: heavy and weak, from a standstill with the wheels
   // turned the grip pins it at ~0.008 blocks/tick, neither moving nor turning until the wheels
-  // straighten (keyboard too; notes/engine.md, Cars).
+  // straighten (keyboard too; notes/engine.md, Cars). None either while the handbrake (Space,
+  // the Brake button) is held: GTA2's own handbrake slides and spins are back.
   const NO_GRIP_MODELS = new Set([54]); // car_model_enum::TANK
   function gripNow() {
     if (devState && devState.inCar && NO_GRIP_MODELS.has(devState.carModel)) return 0;
+    if (devState && devState.inCar && down.has('Space')) return 0;
     return T.steerGrip;
   }
   function applySteerParams() {
