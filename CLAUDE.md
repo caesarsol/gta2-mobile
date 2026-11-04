@@ -38,6 +38,7 @@ terse. Update a note in the same commit as the change it documents (or its own `
 | `notes/engine.md` | touching input, state, cars/steering, camera, HUD, shell screens, weapons; engine facts and measurements |
 | `notes/overlay.md` | changing `mobile/`: joystick rings, buttons, rotation, map screen, sound, loader, autostart |
 | `notes/build.md` | rebuilding the engine, patches, archived builds (`old/`) and per-build saves |
+| `notes/reference.md` | vehicle model numbers and names, map block / slope / arrow bits, map objects and zones |
 
 ## Architecture (do not break)
 
@@ -73,5 +74,6 @@ source <(scripts/dev-servers.sh /path/to/GTA2INSTALLER.exe)   # site :8124, inst
 node scripts/headless.js                                        # smoke: clean start, turn, walk, car
 ```
 
-Probes start **clean** (`h.startClean`), drive in the open square or on the long road, wait for
-the dev state before driving, and record per frame (`h.record`). Everything else: `notes/testing.md`.
+Probes start **clean** (`h.startClean`), drive in the **test area** (`h.testArea`: walled road,
+no traffic) or on the long road, wait for the dev state before driving, and record per frame
+(`h.record`). Everything else: `notes/testing.md`.
