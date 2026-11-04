@@ -380,10 +380,6 @@ html.gta-rotate #gtaReload {
   background: radial-gradient(circle, rgba(0, 0, 0, 0.6) 0 30px, rgba(255, 196, 0, 0.3) 31px);
   border-color: #ffc400;
 }
-/* Fire pressed, then slid onto the ring: still firing (yellow disc) and aiming (bright ring) */
-.gta-btn-fire.is-turret.is-down.is-aiming {
-  background: radial-gradient(circle, rgba(255, 196, 0, 0.9) 0 30px, rgba(255, 196, 0, 0.3) 31px);
-}
 .gta-btn-fire.is-turret .gta-fire-label {
   font-size: 12px;
 }

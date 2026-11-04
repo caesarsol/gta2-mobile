@@ -40,8 +40,8 @@ Design decisions and mechanics of `mobile.js` / `mobile.css` / `autostart.js` / 
   turns; the target is cleared (−1) when leaving the tank. The ring's left edge just touches
   Brake (checked at 844×390). Verified headless, landscape and forced landscape: ring up →
   turret 720 (up), no ammo used; drag right → down → target 0; centre tap fires (200 → 190).
-  A finger that presses Fire and then slides onto the ring starts aiming as well (the shot key
-  stays held until it lifts: disc yellow + ring bright, `.is-down.is-aiming`).
+  A finger that presses Fire and then slides onto the ring stops firing (key released) and aims;
+  to fire again, lift and press again (the user's call: no shot held while aiming).
 
 - Right: Fire (L), Enter/Exit (Enter), Jump/Brake (Space). In menu mode (no player yet, game
   over) the stick is a d-pad, Enter = OK, Jump = Esc. In an **unarmed car** Fire and the weapon
