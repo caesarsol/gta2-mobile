@@ -201,6 +201,17 @@ async function teleport(page, x, y, waitCamera = true) {
   return true;
 }
 
+// The test area (engine dev hook gta2_dev_test_area): a walled square of plain road and pavement
+// with no traffic and no objects, carved into the map where no script object is (Downtown:
+// 41 x 41 at x 99, y 0). Builds it (once per map) and teleports the player, on foot, to its
+// centre (a road block). Returns { x, y, z, x0, y0, size } or null.
+async function testArea(page) {
+  const a = await page.evaluate(() => { const M = window.gta2.Module; const q = M.ccall('gta2_dev_test_area', 'number', ['number', 'number', 'number'], [-1, -1, 64]); return Array.from(M.HEAP32.subarray(q >> 2, (q >> 2) + 8)); });
+  if (!a[0]) { console.warn('[headless] test area refused, reason', a[7]); return null; }
+  if (!(await teleport(page, a[1], a[2]))) return null;
+  return { x: a[1], y: a[2], z: a[3], x0: a[4], y0: a[5], size: a[6] };
+}
+
 // Gets out of the current car, if any: Enter is ignored while the car still rolls, so brake
 // first (handbrake), then press Enter until the dev state agrees. Teleporting or spawning while
 // still seated wedges the new car against the old one (nothing moves afterwards).
@@ -260,7 +271,7 @@ async function record(page, ms) {
   return { rows: () => page.evaluate(() => window.__rec) };
 }
 
-module.exports = { DEFAULT_URL, PROFILE_DIR, launch, cleanSaves, startGame, startClean, state, ccall, ints, findOpen, findRoad, teleport, exitCar, enterCar, record };
+module.exports = { DEFAULT_URL, PROFILE_DIR, launch, cleanSaves, startGame, startClean, state, ccall, ints, findOpen, findRoad, testArea, teleport, exitCar, enterCar, record };
 
 if (require.main === module) {
   (async () => {

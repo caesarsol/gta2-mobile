@@ -546,6 +546,9 @@ html.gta-rotate #gtaReload {
   flex-wrap: wrap;
   gap: 8px;
 }
+.gta-tune-spawn-place {
+  margin-top: 8px;
+}
 .gta-tune-spawn-row .gta-pill {
   padding: 6px 12px;
   font-size: 12px;

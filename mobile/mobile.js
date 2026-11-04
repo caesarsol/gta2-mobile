@@ -164,6 +164,9 @@
         <div class="gta-tune-spawn">
           <div class="gta-tune-group-title">Spawn</div>
           <div class="gta-tune-spawn-row"></div>
+          <div class="gta-tune-spawn-row gta-tune-spawn-place">
+            <button type="button" class="gta-pill gta-pill--primary" id="gtaTestArea">Test area</button>
+          </div>
         </div>
         <div class="gta-tune-rows"></div>
         <div class="gta-panel-actions">
@@ -798,6 +801,16 @@
   // are the game's own for that index (text "car<n>", gta2_dev_car_name; the source's enum names
   // do not match: 83 is the Furore GT, 69 the U-Jerk Truck). GTA2 has no motorbikes.
   const SPAWN_MODELS = [['Tank', 54], ['Z-Type', 70], ['Furore GT', 83], ['Land Roamer', 22], ['Cop Car', 12], ['Fire Truck', 17], ['Bus', 11], ['Bug', 8]];
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const tapKey = async (code, ms = 120) => { press(code); await sleep(ms); release(code); };
+  let spawning = false;
+  async function exitCar() {
+    if (!readDev() || !readDev().inCar) return;
+    press('Space'); // stop first: Enter is ignored while the car rolls
+    for (let i = 0; i < 30 && readDev() && readDev().speed > 0.01; i++) await sleep(100);
+    release('Space');
+    for (let i = 0; i < 4 && readDev() && readDev().inCar; i++) { await tapKey('Enter'); await sleep(1200); }
+  }
   const SPAWN_GAP = 0.9; // blocks from you to the car's centre (on foot; 2.5 from a car you drive)
   function spawnVehicle(model) {
     const g = G();
@@ -812,6 +825,34 @@
         [model, Math.round(gap * Math.sin(a)), Math.round(gap * Math.cos(a)), rot]);
     } catch { return false; }
   }
+  // Test area (engine dev hook gta2_dev_test_area, port/platform/test_area_web.cpp): a walled
+  // square of plain road and pavement with no traffic, carved into the map where no script
+  // object is (Downtown: 41 x 41 at the top edge). Out of the car (teleporting needs you on
+  // foot), built (once per map), teleported to its centre; if you were driving, the same model
+  // is spawned in front of you.
+  async function goTestArea() {
+    const g = G();
+    if (spawning || !g || !g.Module || mode !== 'play') return;
+    spawning = true;
+    try {
+      const d = readDev();
+      const model = d && d.inCar ? d.carModel : null;
+      await exitCar();
+      const M = g.Module;
+      const q = M.ccall('gta2_dev_test_area', 'number', ['number', 'number', 'number'], [-1, -1, 64]);
+      const a = M.HEAP32.subarray(q >> 2, (q >> 2) + 8);
+      if (!a[0]) return;
+      let ok = 0;
+      for (let i = 0; i < 5 && !ok; i++) { ok = M.ccall('gta2_dev_teleport', 'number', ['number', 'number'], [a[1], a[2]]); if (!ok) await sleep(700); }
+      if (ok && model !== null) {
+        await sleep(1000);
+        spawnVehicle(model);
+      }
+    } catch { /* older engine */ } finally {
+      spawning = false;
+    }
+  }
+  onTap(tunePanel.querySelector('#gtaTestArea'), () => { tunePanel.hidden = true; goTestArea(); });
   const spawnRow = tunePanel.querySelector('.gta-tune-spawn-row');
   for (const [name, model] of SPAWN_MODELS) {
     const b = document.createElement('button');

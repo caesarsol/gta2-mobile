@@ -59,11 +59,15 @@ groups rows by the label's group and flows the groups down two CSS columns (`col
 `break-inside: avoid`), ✕ pill absolute in the corner (the inner `.gta-panel-scroll` scrolls,
 padded on the left by the notch inset), small Reset. `saveTune` stores **only values that differ
 from the default**, so a changed default reaches everyone who left that setting alone (no
-migration list). Tap the label for the help text. A **Spawn · get in** row on top (`SPAWN_MODELS`:
-Tank 54, Z-Type 83, Gun jeep 22, Police 12, Fire truck 17, Bus 11, Bike 69) closes the panel,
-gets out of the current car (handbrake, then Enter), spawns the model 2 blocks ahead
-(`gta2_dev_spawn_car`, same heading) and presses Enter (the door walk takes ~4 s). Pushed
-untested on request (2026-11-04). No probes or screenshots for this panel (user
+migration list). Tap the label for the help text. A **Spawn** row on top (`SPAWN_MODELS`, model numbers and names in `notes/reference.md`:
+Tank 54, Z-Type 70, Furore GT 83, Land Roamer 22, Cop Car 12, Fire Truck 17, Bus 11, Bug 8)
+closes the panel and spawns the vehicle **in front of your face, side-on, its left (driver's)
+door toward you** (`gta2_dev_spawn_car_near`, centre 0.9 blocks ahead, heading = yours + 90°;
+2.5 blocks ahead when you are driving). Nobody presses Enter: you get in (measured: 1.3–1.6 s
+from Enter to seated, against ~4.5 s for a car 2 blocks away). **Test area** (yellow pill):
+gets out of the car if needed (handbrake, Enter: teleporting needs you on foot), builds the
+test area (`gta2_dev_test_area(-1, -1, 64)`), teleports you to its centre and, if you were
+driving, spawns the same model in front of you. No probes or screenshots for this panel (user
 request): edit and push.
 
 ## Touch hardening

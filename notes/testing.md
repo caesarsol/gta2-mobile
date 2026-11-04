@@ -51,7 +51,12 @@ node scripts/headless.js                                        # smoke test: cl
    probe's world: its abandoned test cars on the road, its position, its damage. Symptoms seen:
    spawns "failing" (the new car lands on an old one and Enter boards neither), the player
    crawling at heading 180°, hard "braking" at full speed that was a rear-ending.
-2. **Where to drive**: `h.findOpen()` → the largest open square (a park, ~19 blocks; room for
+2. **Where to drive**: first choice `await h.testArea(page)`: a walled 41 × 41 square of plain
+   road (lane-marked lid) and pavement islands carved into the map, **no traffic** (no arrows),
+   no objects, peds only on the pavement (Downtown: x 99–139, y 0–40, ground z 1; centre
+   119, 20). Built once per map (`gta2_dev_test_area`, see `notes/engine.md`), teleports on
+   foot; then `h.enterCar(x, model)`. Measured 2026-11-04: model 83 reaches 0.40 blocks/tick
+   in ~28 blocks; a wall hit stops the car, nothing else does. Otherwise: `h.findOpen()` → the largest open square (a park, ~19 blocks; room for
    turns, no walls, but speeds stay ≤ 0.2 blocks/tick); `h.findRoad()` → the longest straight
    road (145 blocks along y at the first result; top speed 0.4 for model 25) — it has **traffic
    and parked cars**, so a lane change can hit something: repeat on 2–3 offsets along the road
@@ -91,11 +96,12 @@ node scripts/headless.js                                        # smoke test: cl
 
 ## Where things are (this sandbox)
 
-- Repo: `/home/user/gta2-mobile`. Engine toolchain + sources: `/home/user/m1stermo/gta2-browser/`
-  (`research/gta2_re` pinned, `research/port-work/core` patched, `research/toolchains/emsdk`,
-  1.7 GB). See `notes/build.md`.
-- Installer: `<scratchpad>/gta2inst/GTA2INSTALLER.exe` (362 331 961 bytes). Mirror:
-  `scripts/installer-mirror.py` (the old scratchpad `mirror/serve.py` is the same thing).
+- Repo: `/home/user/gta2-mobile`. Engine toolchain + sources: `/home/user/gta2-mobile-engine/
+  gta2-browser/` (build.sh's default work dir; `research/gta2_re`, `research/port-work/core`
+  patched, `research/toolchains/emsdk`). See `notes/build.md`. The cloud environment's setup
+  script prepares it and the installer at session start.
+- Installer: `/home/user/gta2-cache/GTA2INSTALLER.exe` (362 331 961 bytes; older sessions:
+  `<scratchpad>/gta2inst/`). Mirror: `scripts/installer-mirror.py`.
 - Browser profile: `/tmp/gta2-mobile-profile`.
 
 ## Lessons (trial and error — add yours)
@@ -152,6 +158,10 @@ node scripts/headless.js                                        # smoke test: cl
   `(nohup python3 -I scripts/installer-mirror.py <exe> 8443 >/dev/null 2>&1 &)`. The installer
   lives in the *gta-js-mobile* scratchpad of this sandbox
   (`/tmp/claude-0/-home-user-gta-js-mobile/<session>/scratchpad/gta2inst/`), not this repo's.
+- 2026-11-04: the smoke test's "entered car: false" comes and goes with where the walk ends
+  (the car spawns 2 blocks south, sometimes into a building); not a regression. Spawning by
+  hand is the Tune panel's job; the smoke test is not fixed.
 - Car models for `h.enterCar(x, model)` are the handling index (`car_model_enum`,
   `Source/enums.hpp`): 10 BUICK (plain), 12 COPCAR (police), 25 HOTDOG_D2 (the fast one used
-  in the steering measurements), 83 ZCX5 (the Zaibatsu Z-Type).
+  in the steering measurements), 70 (Z-Type), 83 (Furore GT; earlier notes wrongly called it
+  the Z-Type). Full list with the game's names: `notes/reference.md`.
